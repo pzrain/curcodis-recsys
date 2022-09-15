@@ -490,27 +490,28 @@ def train(ARG):
     best_ndcg = -np.inf
     patience = ARG.early
     early_stop = 1
+    ### idxlist = list(range(n))
+    ### batch_size = int(float(n+1) / ARG.batchNum)
+    n = graph.number_of_edges()
+    print("n = ", n)
+    graph_edges = list(graph.edges)
     idxlist = list(range(n))
-    batch_size = int(float(n+1) / ARG.batchNum)
-    # n = graph.number_of_edges()
-    # graph_edges = list(graph.edges)
-    # idxlist = list(range(n))
-    # batch_size = int(float(n) / ARG.batchNum)
-    # print("sizes of edges = ", len(idxlist))
-    # print("batch_size = ", batch_size)
+    batch_size = int(float(n) / ARG.batchNum)
+    print("sizes of edges = ", len(idxlist))
+    print("batch_size = ", batch_size)
     for i in range(ARG.epoch):
         np.random.shuffle(idxlist) ## 打乱节点的列表
         for bnum, st_idx in enumerate(range(0, n, batch_size)):
             end_idx = min(st_idx + batch_size, n)
 
-            x = train_data[idxlist[st_idx:end_idx]].to(dev)
+            ### x = train_data[idxlist[st_idx:end_idx]].to(dev)
             # 提取出batch对应的子图并重新编号
-            subgraph = graph.subgraph(idxlist[st_idx:end_idx]) ##  a subgraph of nodes
-            # subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-            # subgraph = graph.edge_subgraph(subgraph_edges)
-            # x = train_data[list(subgraph.nodes())].to(dev)
-            # mapping = dict(zip(subgraph, range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
-            mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes()))) ## ???bug?
+            ### subgraph = graph.subgraph(idxlist[st_idx:end_idx]) ##  a subgraph of nodes
+            subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
+            subgraph = graph.edge_subgraph(subgraph_edges)
+            print("number = ", subgraph.number_of_nodes())
+            x = train_data[list(subgraph.nodes())].to(dev)
+            mapping = dict(zip(subgraph, range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
             subgraph = nx.relabel_nodes(subgraph, mapping)
             # 初始化对应于该子图的采样
             neibSampler = NeibSampler(subgraph, ARG.nbsz)
@@ -528,8 +529,8 @@ def train(ARG):
             logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
             logits_ = logits_.cpu()
             # 在验证集上计算NDCG@100值
-            v = sparse.coo_matrix(V[idxlist[st_idx:end_idx]])
-            # v = sparse.coo_matrix(V[list(subgraph.nodes())])
+            ### v = sparse.coo_matrix(V[idxlist[st_idx:end_idx]])
+            v = sparse.coo_matrix(V[list(subgraph.nodes())])
             ndcg_dist = ndcg_binary_at_k_batch(logits_, v)
             ndcg = ndcg_dist.mean()
 
@@ -555,19 +556,18 @@ def train(ARG):
     for bnum, st_idx in enumerate(range(0, n, batch_size)):
         end_idx = min(st_idx + batch_size, n)
         # 测试数据
-        t = sparse.coo_matrix(T[idxlist[st_idx:end_idx]])
+        ### t = sparse.coo_matrix(T[idxlist[st_idx:end_idx]])
         # 用于测试的对应训练数据
-        x = train_data[idxlist[st_idx:end_idx]].to(dev)
+        ### x = train_data[idxlist[st_idx:end_idx]].to(dev)
         # 初始化子图和图采样
-        subgraph = graph.subgraph(idxlist[st_idx:end_idx])
+        ### subgraph = graph.subgraph(idxlist[st_idx:end_idx])
     
-        # subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-        # subgraph = graph.edge_subgraph(subgraph_edges)
-        # t = sparse.coo_matrix(T[list(subgraph.nodes())])
-        # x = train_data[list(subgraph.nodes())].to(dev)
+        subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
+        subgraph = graph.edge_subgraph(subgraph_edges)
+        t = sparse.coo_matrix(T[list(subgraph.nodes())])
+        x = train_data[list(subgraph.nodes())].to(dev)
 
-        # mapping = dict(zip(subgraph, range(subgraph.number_of_nodes())))
-        mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes())))
+        mapping = dict(zip(subgraph, range(subgraph.number_of_nodes())))
         subgraph = nx.relabel_nodes(subgraph, mapping)
         neibSampler = NeibSampler(subgraph, ARG.nbsz)
         neibSampler.to(dev)

@@ -1,4 +1,5 @@
 import argparse
+from math import log2, sqrt
 import random
 
 import torch
@@ -320,7 +321,7 @@ class myVAE(nn.Module):
         return mu_q, std_q, kl
 
     # 向前传播函数，大部分和disen-recsys是一样的
-    def forward(self, save_emb, neighbors, input_ph=None, is_training_ph=None, anneal_ph=None):
+    def forward(self, save_emb, neighbors, input_ph=None, is_training_ph=None, anneal_ph=None, weights=None):
         self.input_ph = input_ph
         self.is_training_ph = is_training_ph
         self.anneal_ph = anneal_ph
@@ -374,8 +375,11 @@ class myVAE(nn.Module):
         # 计算网络输出结果和Loss
         logits = torch.log(probs)
         logits = self.logsoftmax(logits)
-        recon_loss = torch.mean(torch.sum(-logits * self.input_ph, -1)) ## 类似于于交叉熵，self.input_ph是label
-
+        if weights is not None:
+            recon_loss = torch.mean(torch.sum(-logits * self.input_ph, -1) * weights) ## 类似于于交叉熵，self.input_ph是label
+        else:
+            recon_loss = torch.mean(torch.sum(-logits * self.input_ph, -1))
+            
         # 计算参数的模来避免梯度爆炸 但是因为我在训练的过程中一直将rg/lam设为0，所以实际上没用到
         reg_var = torch.tensor(0.0).to(self.device)
         reg_var += torch.norm(self.items,2)
@@ -472,17 +476,74 @@ def loadData(ratingDir, socialDir, testDir):
     # 这个地方加1是为了后面用range()函数的时候可以不用再加了
     return X, graph, MaxUserId+1, MaxItemId+1, V, T
 
+
+class CLNode:
+    
+    def __init__(self, alpha, mode, period, total_epoch, lambda_0):
+        self.alpha = alpha
+        self.mode = mode
+        self.period = period
+        self.total_epoch = total_epoch
+        self.epoch = 0
+        self.interval = int(self.total_epoch / (self.period + 1))
+        self.curriculum_total_epoch = self.interval * self.period
+        self.lambda_0 = lambda_0
+        
+    def difficulty_measurer(self, graph, label):
+        self.difficulty = []
+        for v in range(label.shape[0]):
+            neighbors = sorted(graph.neighbors(v))
+            if len(neighbors) == 0:
+                self.difficulty.append(0)
+                continue
+            div = torch.zeros(label.shape[1])
+            dist = 0
+            for neighbor in neighbors:
+                div += label[neighbor]
+                dist += torch.sum((label[neighbor] - label[v]) ** 2) / label.shape[1]
+            div /= len(neighbors)
+            dist /= len(neighbors)
+            div = -torch.sum(div * torch.log(div))
+            div[div != div] = 0
+            score = div + self.alpha * dist
+            self.difficulty.append(score)
+        
+        self.difficulty = torch.Tensor(self.difficulty).to(ARG.device)
+        rank = torch.argsort(self.difficulty)[:len(self.difficulty)]
+        for i in range(len(rank)):
+            self.difficulty[rank[i]] = (i + 1) / float(len(rank))
+            
+    def data_scheduler(self):
+        threshold = self.training_scheduler()
+        weights = self.difficulty
+        weights[self.difficulty > threshold] = 0
+        weights[self.difficulty <= threshold] = 1
+        return weights
+    
+    def training_scheduler(self):
+        self.epoch += 1
+        if self.mode == 'linear':
+            threshold = min(1, self.lambda_0 + (1 - self.lambda_0) * self.epoch / self.curriculum_total_epoch)
+        elif self.mode == 'root':
+            threshold = min(1, sqrt(self.lambda_0 ** 2 + (1 - self.lambda_0 ** 2) * self.epoch / self.curriculum_total_epoch))
+        elif self.mode == 'geometric':
+            threshold = min(1, pow(2, log2(self.lambda_0) - log2(self.lambda_0) * self.epoch / self.curriculum_total_epoch))
+        
+        return threshold
+
+
 def train(ARG):
     # 设置训练所用的gpu
     # torch.cuda.set_device(0)
     use_cuda = torch.cuda.is_available() and not ARG.cpu
     dev = torch.device('cuda' if use_cuda else 'cpu')
     ARG.device = dev
+    clnode = CLNode(alpha=1.0, mode='linear', period=5, total_epoch=120, lambda_0=0.25)
 
     #加载训练数据，用户关系图，用户数量，物品数量，验证集，测试集
     train_data, graph, n, m, V, T \
         = loadData(ARG.data+'/train.txt', ARG.data+'/trusts.txt', ARG.data+'/test+.txt')
-
+    clnode.difficulty_measurer(graph, train_data)
     model = myVAE(m, ARG).to(dev)
     optimizer = optim.Adam(model.parameters(), lr=ARG.lr, weight_decay=ARG.rg)
 
@@ -492,25 +553,17 @@ def train(ARG):
     early_stop = 1
     idxlist = list(range(n))
     batch_size = int(float(n+1) / ARG.batchNum)
-    # n = graph.number_of_edges()
-    # graph_edges = list(graph.edges)
-    # idxlist = list(range(n))
-    # batch_size = int(float(n) / ARG.batchNum)
-    # print("sizes of edges = ", len(idxlist))
-    # print("batch_size = ", batch_size)
+    
     for i in range(ARG.epoch):
+        weights = clnode.data_scheduler()
         np.random.shuffle(idxlist) ## 打乱节点的列表
         for bnum, st_idx in enumerate(range(0, n, batch_size)):
             end_idx = min(st_idx + batch_size, n)
-
             x = train_data[idxlist[st_idx:end_idx]].to(dev)
+            batch_weights = weights[idxlist[st_idx:end_idx]].to(dev)
             # 提取出batch对应的子图并重新编号
             subgraph = graph.subgraph(idxlist[st_idx:end_idx]) ##  a subgraph of nodes
-            # subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-            # subgraph = graph.edge_subgraph(subgraph_edges)
-            # x = train_data[list(subgraph.nodes())].to(dev)
-            # mapping = dict(zip(subgraph, range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
-            mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes()))) ## ???bug?
+            mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
             subgraph = nx.relabel_nodes(subgraph, mapping)
             # 初始化对应于该子图的采样
             neibSampler = NeibSampler(subgraph, ARG.nbsz)
@@ -518,7 +571,7 @@ def train(ARG):
             # 训练
             model.train()
             optimizer.zero_grad()
-            logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
+            logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta, batch_weights)
             loss.backward()
             optimizer.step()
             l = loss.item()
@@ -529,7 +582,6 @@ def train(ARG):
             logits_ = logits_.cpu()
             # 在验证集上计算NDCG@100值
             v = sparse.coo_matrix(V[idxlist[st_idx:end_idx]])
-            # v = sparse.coo_matrix(V[list(subgraph.nodes())])
             ndcg_dist = ndcg_binary_at_k_batch(logits_, v)
             ndcg = ndcg_dist.mean()
 
@@ -560,13 +612,6 @@ def train(ARG):
         x = train_data[idxlist[st_idx:end_idx]].to(dev)
         # 初始化子图和图采样
         subgraph = graph.subgraph(idxlist[st_idx:end_idx])
-    
-        # subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-        # subgraph = graph.edge_subgraph(subgraph_edges)
-        # t = sparse.coo_matrix(T[list(subgraph.nodes())])
-        # x = train_data[list(subgraph.nodes())].to(dev)
-
-        # mapping = dict(zip(subgraph, range(subgraph.number_of_nodes())))
         mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes())))
         subgraph = nx.relabel_nodes(subgraph, mapping)
         neibSampler = NeibSampler(subgraph, ARG.nbsz)
