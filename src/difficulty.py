@@ -73,13 +73,22 @@ def calc_root(graph : nx.DiGraph):
 
 
 def calc_difficulty(graph : nx.DiGraph):
+    if isinstance(graph, nx.Graph):
+        new_graph = nx.DiGraph()
+        new_graph.add_nodes_from(graph.nodes())
+        for edge in graph.edges():
+            new_graph.add_edges_from([(edge[0], edge[1]), (edge[1], edge[0])])
+        graph = new_graph
+    elif not isinstance(graph, nx.DiGraph):
+        print("Unsupported graph type!")
+        exit(0)
     in_root, out_root = calc_root(graph)
     I1 = out_root
     I2 = in_root
     I3 = (in_root + out_root ) / 2
     I4 = (math.sqrt(in_root) + math.sqrt(out_root)) / 2
     I5 = abs(math.log(in_root)) + abs(math.log(out_root))
-    I7 = len(G.edges()) / (math.pow(len(G.nodes()), 2) - len(G.nodes()))
+    I7 = len(graph.edges()) / (math.pow(len(graph.nodes()), 2) - len(graph.nodes()))
 
     return I1, I2, I3, I4, I5, I7
 

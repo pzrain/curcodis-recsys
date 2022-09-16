@@ -1,4 +1,5 @@
 import argparse
+import operator
 import random
 
 import torch
@@ -11,6 +12,7 @@ import numpy as np
 import scipy.sparse as sparse
 import networkx as nx
 import bottleneck as bn
+from difficulty import calc_difficulty
 
 def parseArgs():
     ARG = argparse.ArgumentParser()
@@ -501,15 +503,17 @@ def train(ARG):
     print("batch_size = ", batch_size)
     for i in range(ARG.epoch):
         np.random.shuffle(idxlist) ## 打乱节点的列表
+        subgraphs = []
         for bnum, st_idx in enumerate(range(0, n, batch_size)):
             end_idx = min(st_idx + batch_size, n)
-
-            ### x = train_data[idxlist[st_idx:end_idx]].to(dev)
-            # 提取出batch对应的子图并重新编号
-            ### subgraph = graph.subgraph(idxlist[st_idx:end_idx]) ##  a subgraph of nodes
             subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
             subgraph = graph.edge_subgraph(subgraph_edges)
-            print("number = ", subgraph.number_of_nodes())
+            _, _, I, _, _, _ = calc_difficulty(subgraph)
+            subgraphs.append((subgraph, I))
+        subgraphs.sort(key=operator.itemgetter(1))
+
+        for tup in subgraphs:
+            subgraph = tup[0]
             x = train_data[list(subgraph.nodes())].to(dev)
             mapping = dict(zip(subgraph, range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
             subgraph = nx.relabel_nodes(subgraph, mapping)
@@ -565,14 +569,16 @@ def train(ARG):
         subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
         subgraph = graph.edge_subgraph(subgraph_edges)
         t = sparse.coo_matrix(T[list(subgraph.nodes())])
-        x = train_data[list(subgraph.nodes())].to(dev)
+        x = train_data[list(subgraph.nodes())]
 
         mapping = dict(zip(subgraph, range(subgraph.number_of_nodes())))
         subgraph = nx.relabel_nodes(subgraph, mapping)
         neibSampler = NeibSampler(subgraph, ARG.nbsz)
-        neibSampler.to(dev)
+        neibSampler
         # 得到测试结果
         model.eval()
+        model.to(torch.device('cpu'))
+        model.device = torch.device('cpu')
         logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
         logits_ = logits.detach()
         logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
