@@ -411,9 +411,9 @@ class CLNode:
         self.interval = int(self.total_epoch / (self.period + 1))
         self.curriculum_total_epoch = self.interval * self.period
         self.lambda_0 = lambda_0
+        self.difficulty = []
         
     def difficulty_measurer(self, graph, label):
-        self.difficulty = []
         for v in range(label.shape[0]):
             neighbors = sorted(graph.neighbors(v))
             if len(neighbors) == 0:
