@@ -501,59 +501,62 @@ def train(ARG):
     batch_size = int(float(n) / ARG.batchNum)
     print("sizes of edges = ", len(idxlist))
     print("batch_size = ", batch_size)
-    for i in range(ARG.epoch):
-        np.random.shuffle(idxlist) ## 打乱节点的列表
-        subgraphs = []
-        for bnum, st_idx in enumerate(range(0, n, batch_size)):
-            end_idx = min(st_idx + batch_size, n)
-            subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-            subgraph = graph.edge_subgraph(subgraph_edges)
-            _, _, I, _, _, _ = calc_difficulty(subgraph)
-            subgraphs.append((subgraph, I))
-        subgraphs.sort(key=operator.itemgetter(1))
+    # for i in range(ARG.epoch):
+    #     np.random.shuffle(idxlist) ## 打乱节点的列表
+    #     subgraphs = []
+    #     for bnum, st_idx in enumerate(range(0, n, batch_size)):
+    #         end_idx = min(st_idx + batch_size, n)
+    #         subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
+    #         subgraph = graph.edge_subgraph(subgraph_edges)
+    #         _, _, I, _, _, _ = calc_difficulty(subgraph)
+    #         subgraphs.append((subgraph, I))
+    #     subgraphs.sort(key=operator.itemgetter(1))
 
-        for tup in subgraphs:
-            subgraph = tup[0]
-            x = train_data[list(subgraph.nodes())].to(dev)
-            mapping = dict(zip(subgraph, range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
-            subgraph = nx.relabel_nodes(subgraph, mapping)
-            # 初始化对应于该子图的采样
-            neibSampler = NeibSampler(subgraph, ARG.nbsz)
-            neibSampler.to(dev)
-            # 训练
-            model.train()
-            optimizer.zero_grad()
-            logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
-            loss.backward()
-            optimizer.step()
-            l = loss.item()
+    #     for tup in subgraphs:
+    #         subgraph = tup[0]
+    #         x = train_data[list(subgraph.nodes())].to(dev)
+    #         mapping = dict(zip(subgraph, range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
+    #         subgraph = nx.relabel_nodes(subgraph, mapping)
+    #         # 初始化对应于该子图的采样
+    #         neibSampler = NeibSampler(subgraph, ARG.nbsz)
+    #         neibSampler.to(dev)
+    #         # 训练
+    #         model.train()
+    #         optimizer.zero_grad()
+    #         logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
+    #         loss.backward()
+    #         optimizer.step()
+    #         l = loss.item()
 
-            # 在训练结果中去掉训练数据，以免影响预测效果
-            logits_ = logits.detach()
-            logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
-            logits_ = logits_.cpu()
-            # 在验证集上计算NDCG@100值
-            ### v = sparse.coo_matrix(V[idxlist[st_idx:end_idx]])
-            v = sparse.coo_matrix(V[list(subgraph.nodes())])
-            ndcg_dist = ndcg_binary_at_k_batch(logits_, v)
-            ndcg = ndcg_dist.mean()
+    #         # 在训练结果中去掉训练数据，以免影响预测效果
+    #         logits_ = logits.detach()
+    #         logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
+    #         logits_ = logits_.cpu()
+    #         # 在验证集上计算NDCG@100值
+    #         ### v = sparse.coo_matrix(V[idxlist[st_idx:end_idx]])
+    #         v = sparse.coo_matrix(V[list(subgraph.nodes())])
+    #         ndcg_dist = ndcg_binary_at_k_batch(logits_, v)
+    #         ndcg = ndcg_dist.mean()
 
-            # early stop和保存模型
-            if best_ndcg < ndcg:
-                best_epoch = i
-                best_ndcg = ndcg
-                torch.save(model.state_dict(), './model/'+str(best_epoch)+'.pt')
-                early_stop = 1
-            else:
-                if early_stop > patience:
-                    print('Early Stop!')
-                    break
-                else:
-                    early_stop += 1
+    #         # early stop和保存模型
+    #         if best_ndcg < ndcg:
+    #             best_epoch = i
+    #             best_ndcg = ndcg
+    #             torch.save(model.state_dict(), './model/'+str(best_epoch)+'.pt')
+    #             early_stop = 1
+    #         else:
+    #             if early_stop > patience:
+    #                 print('Early Stop!')
+    #                 break
+    #             else:
+    #                 early_stop += 1
 
-        print('Epoch ', i, ' trn-loss: %.4f' % l, ' ndcg: %.4f' % ndcg)
+    #     print('Epoch ', i, ' trn-loss: %.4f' % l, ' ndcg: %.4f' % ndcg)
 
-    # 训练完毕在测试集上进行测试
+    # # 训练完毕在测试集上进行测试
+    # torch.save(model.state_dict(), './model/done.pt')
+    state_dict = torch.load('./model/done.pt')
+    model.load_state_dict(state_dict)
     ndcg_dist = []
     r50_dist = []
     r20_dist = []
@@ -569,16 +572,14 @@ def train(ARG):
         subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
         subgraph = graph.edge_subgraph(subgraph_edges)
         t = sparse.coo_matrix(T[list(subgraph.nodes())])
-        x = train_data[list(subgraph.nodes())]
+        x = train_data[list(subgraph.nodes())].to(dev)
 
         mapping = dict(zip(subgraph, range(subgraph.number_of_nodes())))
         subgraph = nx.relabel_nodes(subgraph, mapping)
         neibSampler = NeibSampler(subgraph, ARG.nbsz)
-        neibSampler
+        neibSampler.to(dev)
         # 得到测试结果
         model.eval()
-        model.to(torch.device('cpu'))
-        model.device = torch.device('cpu')
         logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
         logits_ = logits.detach()
         logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')

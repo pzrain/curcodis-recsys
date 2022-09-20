@@ -1,0 +1,247 @@
+n =  500505
+sizes of edges =  500505
+batch_size =  6256
+Early Stop!
+Epoch  0  trn-loss: 165.3483  ndcg: 0.0127
+Early Stop!
+Epoch  1  trn-loss: 161.7780  ndcg: 0.0127
+Early Stop!
+Epoch  2  trn-loss: 164.7319  ndcg: 0.0121
+Early Stop!
+Epoch  3  trn-loss: 166.7569  ndcg: 0.0116
+Early Stop!
+Epoch  4  trn-loss: 165.0962  ndcg: 0.0123
+Early Stop!
+Epoch  5  trn-loss: 161.5405  ndcg: 0.0121
+Early Stop!
+Epoch  6  trn-loss: 164.5762  ndcg: 0.0118
+Early Stop!
+Epoch  7  trn-loss: 163.2843  ndcg: 0.0119
+Early Stop!
+Epoch  8  trn-loss: 162.6334  ndcg: 0.0115
+Early Stop!
+Epoch  9  trn-loss: 161.1939  ndcg: 0.0120
+Early Stop!
+Epoch  10  trn-loss: 162.0414  ndcg: 0.0121
+Early Stop!
+Epoch  11  trn-loss: 161.9052  ndcg: 0.0122
+Early Stop!
+Epoch  12  trn-loss: 162.1828  ndcg: 0.0126
+Early Stop!
+Epoch  13  trn-loss: 162.9768  ndcg: 0.0125
+Early Stop!
+Epoch  14  trn-loss: 161.2001  ndcg: 0.0122
+Early Stop!
+Epoch  15  trn-loss: 160.7286  ndcg: 0.0117
+Early Stop!
+Epoch  16  trn-loss: 163.4906  ndcg: 0.0114
+Early Stop!
+Epoch  17  trn-loss: 159.4981  ndcg: 0.0123
+Early Stop!
+Epoch  18  trn-loss: 164.0577  ndcg: 0.0108
+Early Stop!
+Epoch  19  trn-loss: 159.0497  ndcg: 0.0117
+Early Stop!
+Epoch  20  trn-loss: 161.8228  ndcg: 0.0118
+Early Stop!
+Epoch  21  trn-loss: 160.1495  ndcg: 0.0108
+Early Stop!
+Epoch  22  trn-loss: 159.6199  ndcg: 0.0119
+Early Stop!
+Epoch  23  trn-loss: 159.7180  ndcg: 0.0120
+Early Stop!
+Epoch  24  trn-loss: 160.8483  ndcg: 0.0119
+Early Stop!
+Epoch  25  trn-loss: 158.4004  ndcg: 0.0118
+Early Stop!
+Epoch  26  trn-loss: 157.4499  ndcg: 0.0112
+Early Stop!
+Epoch  27  trn-loss: 158.6489  ndcg: 0.0117
+Early Stop!
+Epoch  28  trn-loss: 159.6301  ndcg: 0.0128
+Early Stop!
+Epoch  29  trn-loss: 160.9528  ndcg: 0.0114
+Early Stop!
+Epoch  30  trn-loss: 157.2537  ndcg: 0.0118
+Early Stop!
+Epoch  31  trn-loss: 158.8362  ndcg: 0.0116
+Early Stop!
+Epoch  32  trn-loss: 160.1087  ndcg: 0.0117
+Early Stop!
+Epoch  33  trn-loss: 156.2562  ndcg: 0.0107
+Early Stop!
+Epoch  34  trn-loss: 159.9116  ndcg: 0.0118
+Early Stop!
+Epoch  35  trn-loss: 161.3098  ndcg: 0.0116
+Early Stop!
+Epoch  36  trn-loss: 157.2214  ndcg: 0.0115
+Early Stop!
+Epoch  37  trn-loss: 160.9867  ndcg: 0.0109
+Early Stop!
+Epoch  38  trn-loss: 156.2642  ndcg: 0.0125
+Early Stop!
+Epoch  39  trn-loss: 158.3650  ndcg: 0.0122
+Early Stop!
+Epoch  40  trn-loss: 156.4769  ndcg: 0.0124
+Early Stop!
+Epoch  41  trn-loss: 161.1779  ndcg: 0.0120
+Early Stop!
+Epoch  42  trn-loss: 159.3005  ndcg: 0.0116
+Early Stop!
+Epoch  43  trn-loss: 156.6975  ndcg: 0.0112
+Early Stop!
+Epoch  44  trn-loss: 156.1823  ndcg: 0.0128
+Early Stop!
+Epoch  45  trn-loss: 156.8485  ndcg: 0.0115
+Early Stop!
+Epoch  46  trn-loss: 159.5763  ndcg: 0.0124
+Early Stop!
+Epoch  47  trn-loss: 160.7372  ndcg: 0.0114
+Early Stop!
+Epoch  48  trn-loss: 156.6600  ndcg: 0.0112
+Early Stop!
+Epoch  49  trn-loss: 159.1073  ndcg: 0.0115
+Early Stop!
+Epoch  50  trn-loss: 159.2346  ndcg: 0.0118
+Early Stop!
+Epoch  51  trn-loss: 157.0855  ndcg: 0.0116
+Early Stop!
+Epoch  52  trn-loss: 160.0811  ndcg: 0.0112
+Early Stop!
+Epoch  53  trn-loss: 157.8840  ndcg: 0.0115
+Early Stop!
+Epoch  54  trn-loss: 155.9965  ndcg: 0.0115
+Early Stop!
+Epoch  55  trn-loss: 158.3090  ndcg: 0.0119
+Early Stop!
+Epoch  56  trn-loss: 158.1710  ndcg: 0.0116
+Early Stop!
+Epoch  57  trn-loss: 159.6013  ndcg: 0.0116
+Early Stop!
+Epoch  58  trn-loss: 158.2213  ndcg: 0.0117
+Early Stop!
+Epoch  59  trn-loss: 154.1961  ndcg: 0.0113
+Early Stop!
+Epoch  60  trn-loss: 157.8836  ndcg: 0.0115
+Early Stop!
+Epoch  61  trn-loss: 155.4199  ndcg: 0.0116
+Early Stop!
+Epoch  62  trn-loss: 157.7291  ndcg: 0.0112
+Early Stop!
+Epoch  63  trn-loss: 158.1472  ndcg: 0.0118
+Early Stop!
+Epoch  64  trn-loss: 158.0331  ndcg: 0.0114
+Early Stop!
+Epoch  65  trn-loss: 157.1114  ndcg: 0.0121
+Early Stop!
+Epoch  66  trn-loss: 156.5928  ndcg: 0.0108
+Early Stop!
+Epoch  67  trn-loss: 156.7544  ndcg: 0.0110
+Early Stop!
+Epoch  68  trn-loss: 155.2075  ndcg: 0.0112
+Early Stop!
+Epoch  69  trn-loss: 158.1083  ndcg: 0.0117
+Early Stop!
+Epoch  70  trn-loss: 159.1473  ndcg: 0.0125
+Early Stop!
+Epoch  71  trn-loss: 157.0097  ndcg: 0.0113
+Early Stop!
+Epoch  72  trn-loss: 156.0298  ndcg: 0.0118
+Early Stop!
+Epoch  73  trn-loss: 155.6177  ndcg: 0.0122
+Early Stop!
+Epoch  74  trn-loss: 158.1971  ndcg: 0.0106
+Early Stop!
+Epoch  75  trn-loss: 158.6576  ndcg: 0.0116
+Early Stop!
+Epoch  76  trn-loss: 156.0171  ndcg: 0.0125
+Early Stop!
+Epoch  77  trn-loss: 155.8638  ndcg: 0.0110
+Early Stop!
+Epoch  78  trn-loss: 157.1429  ndcg: 0.0115
+Early Stop!
+Epoch  79  trn-loss: 155.8318  ndcg: 0.0115
+Early Stop!
+Epoch  80  trn-loss: 153.1132  ndcg: 0.0112
+Early Stop!
+Epoch  81  trn-loss: 158.4342  ndcg: 0.0119
+Early Stop!
+Epoch  82  trn-loss: 155.6892  ndcg: 0.0110
+Early Stop!
+Epoch  83  trn-loss: 157.3518  ndcg: 0.0120
+Early Stop!
+Epoch  84  trn-loss: 156.0948  ndcg: 0.0116
+Early Stop!
+Epoch  85  trn-loss: 158.0733  ndcg: 0.0120
+Early Stop!
+Epoch  86  trn-loss: 156.1489  ndcg: 0.0116
+Early Stop!
+Epoch  87  trn-loss: 155.8776  ndcg: 0.0110
+Early Stop!
+Epoch  88  trn-loss: 156.4917  ndcg: 0.0116
+Early Stop!
+Epoch  89  trn-loss: 155.7621  ndcg: 0.0113
+Early Stop!
+Epoch  90  trn-loss: 157.0127  ndcg: 0.0115
+Early Stop!
+Epoch  91  trn-loss: 154.6598  ndcg: 0.0114
+Early Stop!
+Epoch  92  trn-loss: 152.2296  ndcg: 0.0121
+Early Stop!
+Epoch  93  trn-loss: 155.8289  ndcg: 0.0116
+Early Stop!
+Epoch  94  trn-loss: 152.6799  ndcg: 0.0116
+Early Stop!
+Epoch  95  trn-loss: 155.7318  ndcg: 0.0112
+Early Stop!
+Epoch  96  trn-loss: 153.9795  ndcg: 0.0115
+Early Stop!
+Epoch  97  trn-loss: 156.2552  ndcg: 0.0107
+Early Stop!
+Epoch  98  trn-loss: 153.1038  ndcg: 0.0115
+Early Stop!
+Epoch  99  trn-loss: 158.0652  ndcg: 0.0122
+Early Stop!
+Epoch  100  trn-loss: 154.2898  ndcg: 0.0111
+Early Stop!
+Epoch  101  trn-loss: 156.0670  ndcg: 0.0116
+Early Stop!
+Epoch  102  trn-loss: 155.1419  ndcg: 0.0118
+Early Stop!
+Epoch  103  trn-loss: 155.9519  ndcg: 0.0124
+Early Stop!
+Epoch  104  trn-loss: 155.3508  ndcg: 0.0117
+Early Stop!
+Epoch  105  trn-loss: 157.3424  ndcg: 0.0115
+Early Stop!
+Epoch  106  trn-loss: 154.3155  ndcg: 0.0118
+Early Stop!
+Epoch  107  trn-loss: 156.3037  ndcg: 0.0113
+Early Stop!
+Epoch  108  trn-loss: 155.2265  ndcg: 0.0120
+Early Stop!
+Epoch  109  trn-loss: 156.5694  ndcg: 0.0118
+Early Stop!
+Epoch  110  trn-loss: 158.5754  ndcg: 0.0118
+Early Stop!
+Epoch  111  trn-loss: 158.5757  ndcg: 0.0119
+Early Stop!
+Epoch  112  trn-loss: 156.8162  ndcg: 0.0117
+Early Stop!
+Epoch  113  trn-loss: 155.0145  ndcg: 0.0109
+Early Stop!
+Epoch  114  trn-loss: 154.1188  ndcg: 0.0119
+Early Stop!
+Epoch  115  trn-loss: 156.8211  ndcg: 0.0114
+Early Stop!
+Epoch  116  trn-loss: 155.7468  ndcg: 0.0112
+Early Stop!
+Epoch  117  trn-loss: 153.0656  ndcg: 0.0119
+Early Stop!
+Epoch  118  trn-loss: 156.8548  ndcg: 0.0106
+Early Stop!
+Epoch  119  trn-loss: 154.0416  ndcg: 0.0109
+test:
+Test NDCG@100=0.06980 (0.00018)
+Test Recall@20=0.07468 (0.00028)
+Test Recall@50=0.12687 (0.00037)
