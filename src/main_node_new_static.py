@@ -12,6 +12,7 @@ import scipy.sparse as sparse
 import networkx as nx
 import bottleneck as bn
 import os
+import time
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def parseArgs():
@@ -20,7 +21,7 @@ def parseArgs():
                      help='../dataset/lastfm, ../dataset/duoban, ../dataset/Ciao, ../dataset/Epinion, ../dataset/yelp', )
     ARG.add_argument('--epoch', type=int, default=1000,
                      help='Number of maximum training epochs.')
-    ARG.add_argument('--batchNum', type=int, default=5,
+    ARG.add_argument('--batchNum', type=int, default=2,
                  help='Training Number of batch.')
     ARG.add_argument('--lr', type=float, default=1e-3,
                      help='Initial learning rate.')
@@ -34,7 +35,7 @@ def parseArgs():
                      help='Temperature of sigmoid/softmax, in (0,oo).')
     ARG.add_argument('--std', type=float, default=0.075,
                      help='Standard deviation of the Gaussian prior.')
-    ARG.add_argument('--kfac', type=int, default=9,
+    ARG.add_argument('--kfac', type=int, default=7,
                      help='Number of facets (macro concepts).')
     ARG.add_argument('--dfac', type=int, default=250,
                      help='Dimension of each facet.')
@@ -42,6 +43,8 @@ def parseArgs():
                      help='Disable Gumbel-Softmax sampling.')
     ARG.add_argument('--numLayer', type=int, default=1,
                      help='Number of residual blocks.')
+    ARG.add_argument("--numGCNLayer", type=int, default=5,
+                     help="Number of disenGCN layers")
     ARG.add_argument('--dropout', type=float, default=0.35,
                             help='Dropout rate (1 - keep probability) in DisenConv.')
     ARG.add_argument('--routit', type=int, default=6,
@@ -58,6 +61,7 @@ def parseArgs():
                      help='Proportion of validation data in the training dataset.')
     ARG.add_argument('--ratio', type=float, default=8,
                      help='Ratio between residual and DisenGCN.')
+    ARG.add_argument('--partitionK', type=int, default=4, help="partition the graph into 2^k subgraphs")
     ARG = ARG.parse_args()
 
     return ARG
@@ -208,7 +212,6 @@ def ndcg_binary_at_k_batch(x_pred, heldout_batch, k=100):
 # 计算RECALL@K
 def recall_at_k_batch(x_pred, heldout_batch, k=100):
     batch_users = x_pred.shape[0]
-
     idx = bn.argpartition(-x_pred, k, axis=1)
     x_pred_binary = np.zeros_like(x_pred, dtype=bool)
     x_pred_binary[np.arange(batch_users)[:, np.newaxis], idx[:, :k]] = True
@@ -262,7 +265,7 @@ class myVAE(nn.Module):
         self.softmax = nn.Softmax(dim=1)
         self.logsoftmax = nn.LogSoftmax(dim=-1)
         self.q_dims = [num_items, dfac, dfac]
-        self.residual = RecursiveResidual(Capsule(1, kfac, dfac, ARG.dropout, ARG.routit), ARG.numLayer, ARG.ratio) ## numLayers: 多次经过DisenGCN，学习邻居的邻居关系
+        self.residual = RecursiveResidual(Capsule(ARG.numGCNLayer, kfac, dfac, ARG.dropout, ARG.routit), ARG.numLayer, ARG.ratio) ## numLayers: 多次经过DisenGCN，学习邻居的邻居关系
         self.items = torch.zeros([num_items, dfac])
         self.cores = torch.zeros([kfac, dfac])
         nn.init.xavier_uniform_(self.items)
@@ -359,7 +362,7 @@ class myVAE(nn.Module):
 
         # 将预测得到的子表征输入以DisenGraph层为主体的残差网络
         z = torch.cat(z_list, dim=1)
-        z = self.residual(z, neighbors)
+        # z = self.residual(z, neighbors)
         dfac = int(z.shape[1] / self.kfac)
 
         # 将学习了社交信息的表征送进Decoder解码器
@@ -474,77 +477,32 @@ def loadData(ratingDir, socialDir, testDir):
     # 这个地方加1是为了后面用range()函数的时候可以不用再加了
     return X, graph, MaxUserId+1, MaxItemId+1, V, T
 
-def train(ARG):
-    # 设置训练所用的gpu
-    # torch.cuda.set_device(0)
-    use_cuda = torch.cuda.is_available() and not ARG.cpu
-    dev = torch.device('cuda' if use_cuda else 'cpu')
-    ARG.device = dev
+def two_k_partition(G: nx.Graph, k: int):
+    partition_1, partition_2 = nx.algorithms.community.kernighan_lin_bisection(G)
+    subgraph_1, subgraph_2 = G.subgraph(partition_1), G.subgraph(partition_2)
+    if k > 1:
+        subgraphs_1 = two_k_partition(subgraph_1, k - 1)
+        subgraphs_2 = two_k_partition(subgraph_2, k - 1)
+        subgraphs = subgraphs_1 + subgraphs_2
+    else:
+        subgraphs = [subgraph_1, subgraph_2]
+    return subgraphs
 
-    #加载训练数据，用户关系图，用户数量，物品数量，验证集，测试集
-    train_data, graph, n, m, V, T\
-        = loadData(ARG.data+'/train.txt', ARG.data+'/trusts.txt', ARG.data+'/test+.txt')
-
-    model = myVAE(m, ARG).to(dev)
-    optimizer = optim.Adam(model.parameters(), lr=ARG.lr, weight_decay=ARG.rg)
-
-    number = n
-    n = graph.number_of_edges()
-    print("n = ", n)
-    graph_edges = list(graph.edges)
-    idxlist = list(range(n))
-    batch_size = int(float(n) / ARG.batchNum)
-    print("sizes of edges = ", len(idxlist))
-    print("batch_size = ", batch_size)
-    for i in range(ARG.epoch):
-        loss_dist = []
-        np.random.shuffle(idxlist) ## 打乱节点的列表
-        for bnum, st_idx in enumerate(range(0, n, batch_size)):
-            end_idx = min(st_idx + batch_size, n)
-
-            subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-            subgraph = graph.edge_subgraph(subgraph_edges)
-            x = train_data[list(subgraph.nodes())].to(dev)
-            mapping = dict(zip(subgraph, range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
-            subgraph = nx.relabel_nodes(subgraph, mapping)
-            # 初始化对应于该子图的采样
-            neibSampler = NeibSampler(subgraph, ARG.nbsz)
-            neibSampler.to(dev)
-            # 训练
-            model.train()
-            optimizer.zero_grad()
-            logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
-            loss.backward()
-            optimizer.step()
-            l = loss.item()
-            loss_dist.append(l)
-            
-        loss_dist_mean = np.mean(np.array(loss_dist))
-        print('Epoch ', i, ' trn-loss: %.4f' % loss_dist_mean)
-
-    # 训练完毕在测试集上进行测试
-    torch.save(model.state_dict(), './model/' + "edge" + '_' + str(ARG.data) + '.pt')
+def test(ARG, model, graph, train_data, T, dev, epoch, subgraphs):
     ndcg_dist = []
     r50_dist = []
     r20_dist = []
-    n = number
-    idxlist = list(range(n))
-    batch_size = int(float(n + 1) / ARG.batchNum)
-    for bnum, st_idx in enumerate(range(0, n, batch_size)):
-        end_idx = min(st_idx + batch_size, n)
-        # 测试数据
-        t = sparse.coo_matrix(T[idxlist[st_idx:end_idx]])
+    # for edge in graph.edges():
+    #     graph[edge[0]][edge[1]]["weight"] = 1
+    # subgraphs = two_k_partition(graph, ARG.partitionK)
+    for i in range(len(subgraphs)):
+        subgraph = subgraphs[i]
+        subgraph_nodes = list(subgraph.nodes())
+        t = sparse.coo_matrix(T[subgraph.nodes()])
         # 用于测试的对应训练数据
-        x = train_data[idxlist[st_idx:end_idx]].to(dev)
+        x = train_data[subgraph_nodes].to(dev)
         # 初始化子图和图采样
-        subgraph = graph.subgraph(idxlist[st_idx:end_idx])
-    
-        # subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-        # subgraph = graph.edge_subgraph(subgraph_edges)
-        # t = sparse.coo_matrix(T[list(subgraph.nodes())])
-        # x = train_data[list(subgraph.nodes())]
-
-        mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes())))
+        mapping = dict(zip(subgraph_nodes, range(subgraph.number_of_nodes())))
         subgraph = nx.relabel_nodes(subgraph, mapping)
         neibSampler = NeibSampler(subgraph, ARG.nbsz)
         neibSampler.to(dev)
@@ -570,13 +528,68 @@ def train(ARG):
     r50 = r50_dist.mean()
     r20 = r20_dist.mean()
 
-    print('test:')
+    print('test: epoch %d' % (epoch))
     print("Test NDCG@100=%.5f (%.5f)" % (
         ndcg_100, np.std(ndcg_dist) / np.sqrt(len(ndcg_dist))))
     print("Test Recall@20=%.5f (%.5f)" % (
         r20, np.std(r20_dist) / np.sqrt(len(r20_dist))))
     print("Test Recall@50=%.5f (%.5f)" % (
         r50, np.std(r50_dist) / np.sqrt(len(r50_dist))))
+
+def train(ARG):
+    # 设置训练所用的gpu
+    # torch.cuda.set_device(0)
+    use_cuda = torch.cuda.is_available() and not ARG.cpu
+    dev = torch.device('cuda' if use_cuda else 'cpu')
+    ARG.device = dev
+
+    #加载训练数据，用户关系图，用户数量，物品数量，验证集，测试集
+    train_data, graph, n, m, V, T \
+        = loadData(ARG.data+'/train.txt', ARG.data+'/trusts.txt', ARG.data+'/test+.txt')
+
+    model = myVAE(m, ARG).to(dev)
+    optimizer = optim.Adam(model.parameters(), lr=ARG.lr, weight_decay=ARG.rg)
+
+    best_epoch = -1
+    best_ndcg = -np.inf
+    early_stop = 0
+    print("n = ", n)
+    print("edges = ", graph.number_of_edges())
+    subgraphs = two_k_partition(graph, ARG.partitionK)
+    for epochNum in range(ARG.epoch):
+        loss_list = []
+        for i in range(len(subgraphs)):
+            subgraph = subgraphs[i]
+            subgraph_nodes = list(subgraph.nodes())
+            x = train_data[subgraph_nodes].to(dev)
+            mapping = dict(zip(subgraph_nodes, range(subgraph.number_of_nodes()))) 
+            subgraph = nx.relabel_nodes(subgraph, mapping)
+            # 初始化对应于该子图的采样
+            neibSampler = NeibSampler(subgraph, ARG.nbsz)
+            neibSampler.to(dev)
+            # 训练
+            model.train()
+            optimizer.zero_grad()
+            logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
+            loss.backward()
+            optimizer.step()
+            l = loss.item()
+            loss_list.append(l)
+
+            # 在训练结果中去掉训练数据，以免影响预测效果
+            logits_ = logits.detach()
+            logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
+            logits_ = logits_.cpu()
+            # 在验证集上计算NDCG@100值
+        loss = np.mean(loss_list)
+        print('Epoch ', epochNum, ' trn-loss: %.4f' % loss)
+        if (epochNum + 1) % 20 == 0:
+            test(ARG, model, graph, train_data, T, dev, epochNum, subgraphs)
+
+    # 训练完毕在测试集上进行测试
+    torch.save(model.state_dict(), './model/node_'+ str(ARG.data) + '_' + str(time.time()) +'.pt')
+    # state_dict = torch.load('./model/node_'+ str(ARG.data) + '_' + str(best_epoch)+'.pt')
+    # model.load_state_dict(state_dict)
 
 if __name__ == '__main__':
     ARG = parseArgs()

@@ -65,30 +65,37 @@ def calc_root(graph : nx.DiGraph):
 
     in_polynomial = np.poly1d(in_list)
     in_roots = in_polynomial.r[np.isreal(in_polynomial.r)].real
-    in_root = in_roots[in_roots > 0][0]
+    try:
+        in_root = in_roots[in_roots > 0][0]
+    except:
+        print("warning: subgraph with no edges")
+        in_root = 1e-5
     out_polynomial = np.poly1d(out_list)
     out_roots = out_polynomial.r[np.isreal(out_polynomial.r)].real
-    out_root = out_roots[out_roots > 0][0]
+    try:
+        out_root = out_roots[out_roots > 0][0]
+    except:
+        out_root = 1e-5
     return in_root, out_root
 
 
 def calc_difficulty(graph : nx.DiGraph):
+    new_graph = graph
     if isinstance(graph, nx.Graph):
         new_graph = nx.DiGraph()
         new_graph.add_nodes_from(graph.nodes())
         for edge in graph.edges():
             new_graph.add_edges_from([(edge[0], edge[1]), (edge[1], edge[0])])
-        graph = new_graph
     elif not isinstance(graph, nx.DiGraph):
         print("Unsupported graph type!")
         exit(0)
-    in_root, out_root = calc_root(graph)
+    in_root, out_root = calc_root(new_graph)
     I1 = out_root
     I2 = in_root
     I3 = (in_root + out_root ) / 2
     I4 = (math.sqrt(in_root) + math.sqrt(out_root)) / 2
     I5 = abs(math.log(in_root)) + abs(math.log(out_root))
-    I7 = len(graph.edges()) / (math.pow(len(graph.nodes()), 2) - len(graph.nodes()))
+    I7 = len(new_graph.edges()) / (math.pow(len(new_graph.nodes()), 2) - len(new_graph.nodes()))
 
     return I1, I2, I3, I4, I5, I7
 

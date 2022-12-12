@@ -12,6 +12,7 @@ import scipy.sparse as sparse
 import networkx as nx
 import bottleneck as bn
 import os
+import time
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def parseArgs():
@@ -20,7 +21,7 @@ def parseArgs():
                      help='../dataset/lastfm, ../dataset/duoban, ../dataset/Ciao, ../dataset/Epinion, ../dataset/yelp', )
     ARG.add_argument('--epoch', type=int, default=1000,
                      help='Number of maximum training epochs.')
-    ARG.add_argument('--batchNum', type=int, default=5,
+    ARG.add_argument('--batchNum', type=int, default=2,
                  help='Training Number of batch.')
     ARG.add_argument('--lr', type=float, default=1e-3,
                      help='Initial learning rate.')
@@ -34,7 +35,7 @@ def parseArgs():
                      help='Temperature of sigmoid/softmax, in (0,oo).')
     ARG.add_argument('--std', type=float, default=0.075,
                      help='Standard deviation of the Gaussian prior.')
-    ARG.add_argument('--kfac', type=int, default=9,
+    ARG.add_argument('--kfac', type=int, default=7,
                      help='Number of facets (macro concepts).')
     ARG.add_argument('--dfac', type=int, default=250,
                      help='Dimension of each facet.')
@@ -104,19 +105,22 @@ class NeibSampler:
                 popkids.append(v)
         self.include_self = include_self
         self.g, self.nb_all, self.pk = graph, nb_all, popkids
-
-    def to(self, dev):
-        self.nb_all = self.nb_all.to(dev)
-        return self
-
-    def sample(self):
         nb = self.nb_all[:, 1:] if self.include_self else self.nb_all
         nb_size = nb.size(1)
         pk_nb = np.zeros((len(self.pk), nb_size), dtype=np.int64)
         for i, v in enumerate(self.pk):
             pk_nb[i] = np.random.choice(sorted(self.g.neighbors(v)), nb_size) ## 邻居数量多于指定值的，随机去掉一部分
         nb[self.pk] = torch.from_numpy(pk_nb).to(nb.device)
-        return self.nb_all ## ?
+
+    def to(self, dev):
+        self.nb_all = self.nb_all.to(dev)
+        return self
+
+    def sample(self, idxlist = None):
+        if idxlist is None:
+            return self.nb_all
+        else:
+            return self.nb_all[idxlist]
 
 #DisenGCN层中的路由传播部分
 class RoutingLayer(nn.Module):
@@ -128,7 +132,7 @@ class RoutingLayer(nn.Module):
         self._cache_zero_d = torch.zeros(1, self.d)
         self._cache_zero_k = torch.zeros(1, self.k)
 
-    def forward(self, x, neighbors, max_iter):
+    def forward(self, x, neighbors, max_iter, trainNum):
         dev = x.device
         if self._cache_zero_d.device != dev:
             self._cache_zero_d = self._cache_zero_d.to(dev)
@@ -151,7 +155,9 @@ class RoutingLayer(nn.Module):
             u += x.view(n, k, delta_d)
             if clus_iter < max_iter - 1:
                 u = fn.normalize(u, dim=2)
-        return u.view(n, d)
+        u = u.view(n, d)
+        u[trainNum:] = x[trainNum:] # keep outer neighbor unchanged
+        return u
 
 # DisenGCN层
 # 相对于源代码默认jump=False
@@ -174,10 +180,10 @@ class Capsule(nn.Module):
     def _dropout(self, x):
         return fn.dropout(x, self.dropout, training=self.training)
 
-    def forward(self, x, nb): ## nb: neighbor
+    def forward(self, x, nb, trainNum): ## nb: neighbor
         nb = nb.view(-1)
         for conv in self.conv_ls:
-            x = self._dropout(fn.relu(conv(x, nb, self.routit)))
+            x = self._dropout(fn.relu(conv(x, nb, self.routit, trainNum)))
         return x
 
 # 计算NDCG@K
@@ -208,7 +214,6 @@ def ndcg_binary_at_k_batch(x_pred, heldout_batch, k=100):
 # 计算RECALL@K
 def recall_at_k_batch(x_pred, heldout_batch, k=100):
     batch_users = x_pred.shape[0]
-
     idx = bn.argpartition(-x_pred, k, axis=1)
     x_pred_binary = np.zeros_like(x_pred, dtype=bool)
     x_pred_binary[np.arange(batch_users)[:, np.newaxis], idx[:, :k]] = True
@@ -234,10 +239,10 @@ class RecursiveResidual(nn.Module):
         self.numLayers = numLayers
         self.ratio = ratio
 
-    def forward(self, x, nb):
+    def forward(self, x, nb, trainNum):
         o = x
         for i in range(self.numLayers):
-            o = self.ratio * x + self.block(o, nb) ## 这里的self.ratio可以理解为attention
+            o = self.ratio * x + self.block(o, nb, trainNum) ## 这里的self.ratio可以理解为attention
         return o
 
 # 以disentangle-recsys源码为基础的VAE
@@ -322,7 +327,7 @@ class myVAE(nn.Module):
         return mu_q, std_q, kl
 
     # 向前传播函数，大部分和disen-recsys是一样的
-    def forward(self, save_emb, neighbors, input_ph=None, is_training_ph=None, anneal_ph=None):
+    def forward(self, save_emb, neighbors, input_ph=None, is_training_ph=None, anneal_ph=None, trainNum=None):
         self.input_ph = input_ph
         self.is_training_ph = is_training_ph
         self.anneal_ph = anneal_ph
@@ -359,7 +364,7 @@ class myVAE(nn.Module):
 
         # 将预测得到的子表征输入以DisenGraph层为主体的残差网络
         z = torch.cat(z_list, dim=1)
-        z = self.residual(z, neighbors)
+        z = self.residual(z, neighbors, trainNum)
         dfac = int(z.shape[1] / self.kfac)
 
         # 将学习了社交信息的表征送进Decoder解码器
@@ -374,9 +379,10 @@ class myVAE(nn.Module):
             probs = (probs_k if (probs is None) else (probs + probs_k))
 
         # 计算网络输出结果和Loss
+        probs = probs[:trainNum]
         logits = torch.log(probs)
         logits = self.logsoftmax(logits)
-        recon_loss = torch.mean(torch.sum(-logits * self.input_ph, -1)) ## 类似于于交叉熵，self.input_ph是label
+        recon_loss = torch.mean(torch.sum(-logits * self.input_ph[0:trainNum], -1)) ## 类似于于交叉熵，self.input_ph是label
 
         # 计算参数的模来避免梯度爆炸 但是因为我在训练的过程中一直将rg/lam设为0，所以实际上没用到
         reg_var = torch.tensor(0.0).to(self.device)
@@ -474,87 +480,53 @@ def loadData(ratingDir, socialDir, testDir):
     # 这个地方加1是为了后面用range()函数的时候可以不用再加了
     return X, graph, MaxUserId+1, MaxItemId+1, V, T
 
-def train(ARG):
-    # 设置训练所用的gpu
-    # torch.cuda.set_device(0)
-    use_cuda = torch.cuda.is_available() and not ARG.cpu
-    dev = torch.device('cuda' if use_cuda else 'cpu')
-    ARG.device = dev
-
-    #加载训练数据，用户关系图，用户数量，物品数量，验证集，测试集
-    train_data, graph, n, m, V, T\
-        = loadData(ARG.data+'/train.txt', ARG.data+'/trusts.txt', ARG.data+'/test+.txt')
-
-    model = myVAE(m, ARG).to(dev)
-    optimizer = optim.Adam(model.parameters(), lr=ARG.lr, weight_decay=ARG.rg)
-
-    number = n
-    n = graph.number_of_edges()
-    print("n = ", n)
-    graph_edges = list(graph.edges)
-    idxlist = list(range(n))
-    batch_size = int(float(n) / ARG.batchNum)
-    print("sizes of edges = ", len(idxlist))
-    print("batch_size = ", batch_size)
-    for i in range(ARG.epoch):
-        loss_dist = []
-        np.random.shuffle(idxlist) ## 打乱节点的列表
-        for bnum, st_idx in enumerate(range(0, n, batch_size)):
-            end_idx = min(st_idx + batch_size, n)
-
-            subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-            subgraph = graph.edge_subgraph(subgraph_edges)
-            x = train_data[list(subgraph.nodes())].to(dev)
-            mapping = dict(zip(subgraph, range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
-            subgraph = nx.relabel_nodes(subgraph, mapping)
-            # 初始化对应于该子图的采样
-            neibSampler = NeibSampler(subgraph, ARG.nbsz)
-            neibSampler.to(dev)
-            # 训练
-            model.train()
-            optimizer.zero_grad()
-            logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
-            loss.backward()
-            optimizer.step()
-            l = loss.item()
-            loss_dist.append(l)
-            
-        loss_dist_mean = np.mean(np.array(loss_dist))
-        print('Epoch ', i, ' trn-loss: %.4f' % loss_dist_mean)
-
-    # 训练完毕在测试集上进行测试
-    torch.save(model.state_dict(), './model/' + "edge" + '_' + str(ARG.data) + '.pt')
+def test(ARG, model, graph, train_data, T, dev, epoch, neibSampler, n, batch_size):
     ndcg_dist = []
     r50_dist = []
     r20_dist = []
-    n = number
+    # for edge in graph.edges():
+    #     graph[edge[0]][edge[1]]["weight"] = 1
+    # subgraphs = two_k_partition(graph, ARG.partitionK)
     idxlist = list(range(n))
-    batch_size = int(float(n + 1) / ARG.batchNum)
+    np.random.shuffle(idxlist)
     for bnum, st_idx in enumerate(range(0, n, batch_size)):
         end_idx = min(st_idx + batch_size, n)
-        # 测试数据
-        t = sparse.coo_matrix(T[idxlist[st_idx:end_idx]])
-        # 用于测试的对应训练数据
-        x = train_data[idxlist[st_idx:end_idx]].to(dev)
-        # 初始化子图和图采样
-        subgraph = graph.subgraph(idxlist[st_idx:end_idx])
-    
-        # subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-        # subgraph = graph.edge_subgraph(subgraph_edges)
-        # t = sparse.coo_matrix(T[list(subgraph.nodes())])
-        # x = train_data[list(subgraph.nodes())]
+        neighbors = neibSampler.sample(idxlist[st_idx:end_idx])
+        out_neighbors = []
+        check_in_idxlist = [0 for i in range(n)]
+        check_in_out_neighbors = [0 for i in range(n)]
+        for i in range(st_idx, end_idx):
+            check_in_idxlist[idxlist[i]] = 1
+        for index in range(len(neighbors)):
+            for neighbor_index in range(len(neighbors[index])):
+                neighbor = neighbors[index][neighbor_index].item()
+                if neighbor == -1:
+                    continue
+                if check_in_idxlist[neighbor] == 0 and check_in_out_neighbors[neighbor] == 0:
+                    out_neighbors.append(neighbor)
+                    check_in_out_neighbors[neighbor] = 1
+        x = train_data[idxlist[st_idx:end_idx] + out_neighbors].to(dev)
 
-        mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes())))
-        subgraph = nx.relabel_nodes(subgraph, mapping)
-        neibSampler = NeibSampler(subgraph, ARG.nbsz)
-        neibSampler.to(dev)
+        mapping = dict(zip(idxlist[st_idx:end_idx] + out_neighbors, range(len(idxlist[st_idx:end_idx]) + len(out_neighbors)))) 
+        sample_neighbors = torch.zeros(neighbors.size()).to(dev)
+
+        for index in range(len(neighbors)):
+            for neighbor_index in range(len(neighbors[index])):
+                # print((neighbors[index][neighbor_index]).item())
+                if (neighbors[index][neighbor_index]).item() != -1:
+                    sample_neighbors[index][neighbor_index] = mapping[(neighbors[index][neighbor_index]).item()]
+        for i in range(len(out_neighbors)):
+            sample_neighbors = torch.cat((sample_neighbors, (-torch.ones(len(neighbors[0])).to(dev)).view(1, -1)), 0)
+        sample_neighbors = sample_neighbors.long() 
         # 得到测试结果
         model.eval()
-        logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
+        trainNum = len(idxlist[st_idx:end_idx])
+        logits, loss = model(False, sample_neighbors, x, 1, ARG.beta, trainNum)
         logits_ = logits.detach()
-        logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
+        logits_[torch.nonzero(x[0:trainNum], as_tuple=True)] = float('-inf')
         logits_ = logits_.cpu()
         # 计算NDCG@100\RECALL@50\RECALL@20
+        t = sparse.coo_matrix(T[idxlist[st_idx:end_idx]])
         ndcg_100 = ndcg_binary_at_k_batch(logits_, t, k=100)
         ndcg_dist.append(ndcg_100)
         r50 = recall_at_k_batch(logits_, t, k=50)
@@ -570,13 +542,98 @@ def train(ARG):
     r50 = r50_dist.mean()
     r20 = r20_dist.mean()
 
-    print('test:')
+    print('test: epoch %d' % (epoch))
     print("Test NDCG@100=%.5f (%.5f)" % (
         ndcg_100, np.std(ndcg_dist) / np.sqrt(len(ndcg_dist))))
     print("Test Recall@20=%.5f (%.5f)" % (
         r20, np.std(r20_dist) / np.sqrt(len(r20_dist))))
     print("Test Recall@50=%.5f (%.5f)" % (
         r50, np.std(r50_dist) / np.sqrt(len(r50_dist))))
+
+
+def train(ARG):
+    # 设置训练所用的gpu
+    # torch.cuda.set_device(0)
+    use_cuda = torch.cuda.is_available() and not ARG.cpu
+    dev = torch.device('cuda' if use_cuda else 'cpu')
+    ARG.device = dev
+
+    #加载训练数据，用户关系图，用户数量，物品数量，验证集，测试集
+    train_data, graph, n, m, V, T \
+        = loadData(ARG.data+'/train.txt', ARG.data+'/trusts.txt', ARG.data+'/test+.txt')
+
+    model = myVAE(m, ARG).to(dev)
+    optimizer = optim.Adam(model.parameters(), lr=ARG.lr, weight_decay=ARG.rg)
+
+    # 全局的neibSampler
+    neibSampler = NeibSampler(graph, ARG.nbsz)
+    neibSampler.to(dev)
+
+    idxlist = list(range(n))
+    batch_size = int(float(n+1) / ARG.batchNum)
+    print("n = ", n)
+    print("batch_size = ", batch_size)
+    print("edges = ", graph.number_of_edges())
+    for epochNum in range(ARG.epoch):
+        np.random.shuffle(idxlist) ## 打乱节点的列表
+        loss_list = []
+        
+        for bnum, st_idx in enumerate(range(0, n, batch_size)):
+            end_idx = min(st_idx + batch_size, n)
+
+            # x = train_data[idxlist[st_idx:end_idx]].to(dev)
+            neighbors = neibSampler.sample(idxlist[st_idx:end_idx])
+            out_neighbors = []
+            check_in_idxlist = [0 for i in range(n)]
+            check_in_out_neighbors = [0 for i in range(n)]
+            for i in range(st_idx, end_idx):
+                check_in_idxlist[idxlist[i]] = 1
+            for index in range(len(neighbors)):
+                for neighbor_index in range(len(neighbors[index])):
+                    neighbor = neighbors[index][neighbor_index].item()
+                    if neighbor == -1:
+                        continue
+                    if check_in_idxlist[neighbor] == 0 and check_in_out_neighbors[neighbor] == 0:
+                        out_neighbors.append(neighbor)
+                        check_in_out_neighbors[neighbor] = 1
+            x = train_data[idxlist[st_idx:end_idx] + out_neighbors].to(dev)
+
+            mapping = dict(zip(idxlist[st_idx:end_idx] + out_neighbors, range(len(idxlist[st_idx:end_idx]) + len(out_neighbors))))
+            # print("len(mapping) = ", len(mapping))
+            # print(neighbors.size())
+            sample_neighbors = torch.zeros(neighbors.size()).to(dev)
+
+            for index in range(len(neighbors)):
+                for neighbor_index in range(len(neighbors[index])):
+                    # print((neighbors[index][neighbor_index]).item())
+                    if (neighbors[index][neighbor_index]).item() != -1:
+                        sample_neighbors[index][neighbor_index] = mapping[(neighbors[index][neighbor_index]).item()]
+            for i in range(len(out_neighbors)):
+                sample_neighbors = torch.cat((sample_neighbors, (-torch.ones(len(neighbors[0])).to(dev)).view(1, -1)), 0)
+            sample_neighbors = sample_neighbors.long()     
+            # 初始化对应于该子图的采样
+            # 训练
+            model.train()
+            optimizer.zero_grad()
+            trainNum = len(idxlist[st_idx:end_idx])
+            # print("siz = ", neighbors.size())
+            logits, loss = model(False, sample_neighbors, x, 1, ARG.beta, trainNum)
+            loss.backward()
+            optimizer.step()
+            l = loss.item()
+            # print("after siz = ", neighbors.size())
+            loss_list.append(l)
+        loss = np.mean(loss_list)
+
+        # print('Epoch ', i, ' trn-loss: %.4f' % loss, ' ndcg: %.4f' % epoch_ndcg)
+        print('Epoch ', epochNum, ' trn-loss: %.4f' % (loss))
+        if (epochNum + 1) % 20 == 0:
+            test(ARG, model, graph, train_data, T, dev, epochNum, neibSampler, n, batch_size)
+
+    # 训练完毕在测试集上进行测试
+    torch.save(model.state_dict(), './model/node_'+ str(ARG.data) + '_' + str(time.time()) +'.pt')
+    # state_dict = torch.load('./model/node_'+ str(ARG.data) + '_' + str(best_epoch)+'.pt')
+    # model.load_state_dict(state_dict)
 
 if __name__ == '__main__':
     ARG = parseArgs()

@@ -11,6 +11,8 @@ import numpy as np
 import scipy.sparse as sparse
 import networkx as nx
 import bottleneck as bn
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 def parseArgs():
     ARG = argparse.ArgumentParser()
@@ -18,7 +20,7 @@ def parseArgs():
                      help='../dataset/lastfm, ../dataset/duoban, ../dataset/Ciao, ../dataset/Epinion, ../dataset/yelp', )
     ARG.add_argument('--epoch', type=int, default=1000,
                      help='Number of maximum training epochs.')
-    ARG.add_argument('--batchNum', type=int, default=5,
+    ARG.add_argument('--batchNum', type=int, default=2,
                  help='Training Number of batch.')
     ARG.add_argument('--lr', type=float, default=1e-3,
                      help='Initial learning rate.')
@@ -200,13 +202,12 @@ def ndcg_binary_at_k_batch(x_pred, heldout_batch, k=100):
     idcg = np.array([(tp[:min(n, k)]).sum()
                      for n in heldout_batch.getnnz(axis=1)])
     ndcg = dcg / idcg
-    ndcg[np.isnan(ndcg)] = 0
+    ndcg = ndcg[~np.isnan(ndcg)]
     return ndcg
 
 # 计算RECALL@K
 def recall_at_k_batch(x_pred, heldout_batch, k=100):
     batch_users = x_pred.shape[0]
-
     idx = bn.argpartition(-x_pred, k, axis=1)
     x_pred_binary = np.zeros_like(x_pred, dtype=bool)
     x_pred_binary[np.arange(batch_users)[:, np.newaxis], idx[:, :k]] = True
@@ -215,7 +216,7 @@ def recall_at_k_batch(x_pred, heldout_batch, k=100):
     tmp = (np.logical_and(x_true_binary, x_pred_binary).sum(axis=1)).astype(
         np.float32)
     recall = tmp / np.minimum(k, x_true_binary.sum(axis=1))
-    recall[np.isnan(recall)] = 0
+    recall = recall[~np.isnan(recall)]
     return recall
 
 # 以上代码全部来自于DisenGCN或者Disentangle-recsys
@@ -460,9 +461,12 @@ def loadData(ratingDir, socialDir, testDir):
     with open(testDir) as f:
         test = f.readlines()
 
+    testsetU = []
     for line in test:
         items = line.split()
         userId = int(items[0])
+        if userId not in testsetU:
+            testsetU.append(userId)
         itemId = int(items[1])
         testUser.append(userId)
         testItem.append(itemId)
@@ -470,7 +474,7 @@ def loadData(ratingDir, socialDir, testDir):
     T = sparse.coo_matrix((testRate, (testUser, testItem)), shape=(MaxUserId + 1, MaxItemId + 1)).toarray()
 
     # 这个地方加1是为了后面用range()函数的时候可以不用再加了
-    return X, graph, MaxUserId+1, MaxItemId+1, V, T
+    return X, graph, MaxUserId+1, MaxItemId+1, V, T, testsetU
 
 def train(ARG):
     # 设置训练所用的gpu
@@ -480,7 +484,7 @@ def train(ARG):
     ARG.device = dev
 
     #加载训练数据，用户关系图，用户数量，物品数量，验证集，测试集
-    train_data, graph, n, m, V, T \
+    train_data, graph, n, m, V, T, testsetU \
         = loadData(ARG.data+'/train.txt', ARG.data+'/trusts.txt', ARG.data+'/test+.txt')
 
     model = myVAE(m, ARG).to(dev)
@@ -552,6 +556,9 @@ def train(ARG):
     ndcg_dist = []
     r50_dist = []
     r20_dist = []
+    idxlist = testsetU
+    n = len(idxlist)
+    batch_size = int(float(n+1) / ARG.batchNum)
     for bnum, st_idx in enumerate(range(0, n, batch_size)):
         end_idx = min(st_idx + batch_size, n)
         # 测试数据

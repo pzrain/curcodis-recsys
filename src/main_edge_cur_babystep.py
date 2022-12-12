@@ -15,6 +15,8 @@ import scipy.sparse as sparse
 import networkx as nx
 import bottleneck as bn
 from difficulty import calc_difficulty
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def parseArgs():
     ARG = argparse.ArgumentParser()
@@ -38,7 +40,7 @@ def parseArgs():
                      help='Standard deviation of the Gaussian prior.')
     ARG.add_argument('--kfac', type=int, default=7,
                      help='Number of facets (macro concepts).')
-    ARG.add_argument('--dfac', type=int, default=100,
+    ARG.add_argument('--dfac', type=int, default=250,
                      help='Dimension of each facet.')
     ARG.add_argument('--nogb', action='store_true', default=False,
                      help='Disable Gumbel-Softmax sampling.')
@@ -56,7 +58,7 @@ def parseArgs():
                         help='Insist on using CPU instead of CUDA.')
     ARG.add_argument('--monorate', action='store_true', default=True,
                         help='Transform the input rates into 0/1.')
-    ARG.add_argument('--split', type=float, default=0.1,
+    ARG.add_argument('--split', type=float, default=0,
                      help='Proportion of validation data in the training dataset.')
     ARG.add_argument('--ratio', type=float, default=8,
                      help='Ratio between residual and DisenGCN.')
@@ -204,7 +206,7 @@ def ndcg_binary_at_k_batch(x_pred, heldout_batch, k=100):
     idcg = np.array([(tp[:min(n, k)]).sum()
                      for n in heldout_batch.getnnz(axis=1)])
     ndcg = dcg / idcg
-    ndcg[np.isnan(ndcg)] = 0
+    ndcg = ndcg[~np.isnan(ndcg)]
     return ndcg
 
 # 计算RECALL@K
@@ -219,7 +221,7 @@ def recall_at_k_batch(x_pred, heldout_batch, k=100):
     tmp = (np.logical_and(x_true_binary, x_pred_binary).sum(axis=1)).astype(
         np.float32)
     recall = tmp / np.minimum(k, x_true_binary.sum(axis=1))
-    recall[np.isnan(recall)] = 0
+    recall = recall[~np.isnan(recall)]
     return recall
 
 # 以上代码全部来自于DisenGCN或者Disentangle-recsys
@@ -519,6 +521,7 @@ def train(ARG):
     early_stop = 1
     ### idxlist = list(range(n))
     ### batch_size = int(float(n+1) / ARG.batchNum)
+    number = n
     n = graph.number_of_edges()
     print("n = ", n)
     graph_edges = list(graph.edges)
@@ -531,6 +534,7 @@ def train(ARG):
         subgraphs = []
         min_difficulty = 1
         threshold = cur_scheduler.schedule()
+        loss_dist = []
         print(threshold)
         for bnum, st_idx in enumerate(range(0, n, batch_size)):
             end_idx = min(st_idx + batch_size, n)
@@ -559,58 +563,34 @@ def train(ARG):
             loss.backward()
             optimizer.step()
             l = loss.item()
-
-            # 在训练结果中去掉训练数据，以免影响预测效果
-            logits_ = logits.detach()
-            logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
-            logits_ = logits_.cpu()
-            # 在验证集上计算NDCG@100值
-            ### v = sparse.coo_matrix(V[idxlist[st_idx:end_idx]])
-            v = sparse.coo_matrix(V[list(subgraph.nodes())])
-            ndcg_dist = ndcg_binary_at_k_batch(logits_, v)
-            ndcg = ndcg_dist.mean()
-
-            # early stop和保存模型
-            if best_ndcg < ndcg:
-                best_epoch = i
-                best_ndcg = ndcg
-                torch.save(model.state_dict(), './model/'+str(best_epoch)+'.pt')
-                early_stop = 1
-            else:
-                if early_stop > patience:
-                    print('Early Stop!')
-                    break
-                else:
-                    early_stop += 1
-
-        print('Epoch ', i, ' trn-loss: %.4f' % l, ' ndcg: %.4f' % ndcg)
+            loss_dist.append(l)
+            
+        loss_dist_mean = np.mean(np.array(loss_dist))
+        print('Epoch ', i, ' trn-loss: %.4f' % loss_dist_mean)
 
     # 训练完毕在测试集上进行测试
+    torch.save(model.state_dict(), './model/' + "babystep" + '_' + str(ARG.data) + '.pt')
     ndcg_dist = []
     r50_dist = []
     r20_dist = []
+    n = number
+    idxlist = list(range(n))
+    batch_size = int(float(n + 1) / ARG.batchNum)
     for bnum, st_idx in enumerate(range(0, n, batch_size)):
         end_idx = min(st_idx + batch_size, n)
         # 测试数据
-        ### t = sparse.coo_matrix(T[idxlist[st_idx:end_idx]])
+        t = sparse.coo_matrix(T[idxlist[st_idx:end_idx]])
         # 用于测试的对应训练数据
-        ### x = train_data[idxlist[st_idx:end_idx]].to(dev)
+        x = train_data[idxlist[st_idx:end_idx]].to(dev)
         # 初始化子图和图采样
-        ### subgraph = graph.subgraph(idxlist[st_idx:end_idx])
-    
-        subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-        subgraph = graph.edge_subgraph(subgraph_edges)
-        t = sparse.coo_matrix(T[list(subgraph.nodes())])
-        x = train_data[list(subgraph.nodes())]
+        subgraph = graph.subgraph(idxlist[st_idx:end_idx])
 
-        mapping = dict(zip(subgraph, range(subgraph.number_of_nodes())))
+        mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes())))
         subgraph = nx.relabel_nodes(subgraph, mapping)
         neibSampler = NeibSampler(subgraph, ARG.nbsz)
-        neibSampler
+        neibSampler.to(dev)
         # 得到测试结果
         model.eval()
-        model.to(torch.device('cpu'))
-        model.device = torch.device('cpu')
         logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
         logits_ = logits.detach()
         logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')

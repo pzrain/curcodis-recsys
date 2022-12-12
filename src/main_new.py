@@ -12,7 +12,9 @@ import scipy.sparse as sparse
 import networkx as nx
 import bottleneck as bn
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+
+# 每次训练完均在训练集上测试，取出最好的一个epoch
 
 def parseArgs():
     ARG = argparse.ArgumentParser()
@@ -34,9 +36,9 @@ def parseArgs():
                      help='Temperature of sigmoid/softmax, in (0,oo).')
     ARG.add_argument('--std', type=float, default=0.075,
                      help='Standard deviation of the Gaussian prior.')
-    ARG.add_argument('--kfac', type=int, default=9,
+    ARG.add_argument('--kfac', type=int, default=7,
                      help='Number of facets (macro concepts).')
-    ARG.add_argument('--dfac', type=int, default=250,
+    ARG.add_argument('--dfac', type=int, default=100,
                      help='Dimension of each facet.')
     ARG.add_argument('--nogb', action='store_true', default=False,
                      help='Disable Gumbel-Softmax sampling.')
@@ -54,7 +56,7 @@ def parseArgs():
                         help='Insist on using CPU instead of CUDA.')
     ARG.add_argument('--monorate', action='store_true', default=True,
                         help='Transform the input rates into 0/1.')
-    ARG.add_argument('--split', type=float, default=0,
+    ARG.add_argument('--split', type=float, default=0.1,
                      help='Proportion of validation data in the training dataset.')
     ARG.add_argument('--ratio', type=float, default=8,
                      help='Ratio between residual and DisenGCN.')
@@ -425,18 +427,21 @@ def loadData(ratingDir, socialDir, testDir):
             MaxUserId = userId
         if itemId > MaxItemId:
             MaxItemId = itemId
+        user.append(userId)
+        item.append(itemId)
+        rate.append(1)
         # 将训练数据中按照split比例分离出一部分作为验证集
-        if random.random() > ARG.split:
-            user.append(userId)
-            item.append(itemId)
-            if ARG.monorate:
-                rate.append(1)
-            else:
-                rate.append(rating)
-        else:
-            validUser.append(userId)
-            validItem.append(itemId)
-            validRate.append(1)
+        # if random.random() > ARG.split:
+        #     user.append(userId)
+        #     item.append(itemId)
+        #     if ARG.monorate:
+        #         rate.append(1)
+        #     else:
+        #         rate.append(rating)
+        # else:
+        #     validUser.append(userId)
+        #     validItem.append(itemId)
+        #     validRate.append(1)
 
     ## X为tensor，V为array
     X = torch.sparse.FloatTensor(torch.tensor([user,item]),torch.tensor(rate),torch.Size([MaxUserId+1, MaxItemId+1])).to_dense()
@@ -462,9 +467,12 @@ def loadData(ratingDir, socialDir, testDir):
     with open(testDir) as f:
         test = f.readlines()
 
+    testsetU = []
     for line in test:
         items = line.split()
         userId = int(items[0])
+        if userId not in testsetU:
+            testsetU.append(userId)
         itemId = int(items[1])
         testUser.append(userId)
         testItem.append(itemId)
@@ -472,7 +480,7 @@ def loadData(ratingDir, socialDir, testDir):
     T = sparse.coo_matrix((testRate, (testUser, testItem)), shape=(MaxUserId + 1, MaxItemId + 1)).toarray()
 
     # 这个地方加1是为了后面用range()函数的时候可以不用再加了
-    return X, graph, MaxUserId+1, MaxItemId+1, V, T
+    return X, graph, MaxUserId+1, MaxItemId+1, V, T, testsetU
 
 def train(ARG):
     # 设置训练所用的gpu
@@ -482,26 +490,34 @@ def train(ARG):
     ARG.device = dev
 
     #加载训练数据，用户关系图，用户数量，物品数量，验证集，测试集
-    train_data, graph, n, m, V, T\
+    train_data, graph, n, m, V, T, testsetU \
         = loadData(ARG.data+'/train.txt', ARG.data+'/trusts.txt', ARG.data+'/test+.txt')
 
+    print("len(testsetU) = ", len(testsetU))
     model = myVAE(m, ARG).to(dev)
     optimizer = optim.Adam(model.parameters(), lr=ARG.lr, weight_decay=ARG.rg)
 
-    number = n
+    best_epoch = -1
+    best = -np.inf
+    best_ndcg = -np.inf
+    best_recall_20 = -np.inf
+    best_recall_50 = -np.inf
+    best_ndcg_std = -np.inf
+    best_recall_20_std = -np.inf
+    best_recall_50_std = -np.inf
+    
     n = graph.number_of_edges()
-    print("n = ", n)
     graph_edges = list(graph.edges)
     idxlist = list(range(n))
     batch_size = int(float(n) / ARG.batchNum)
-    print("sizes of edges = ", len(idxlist))
-    print("batch_size = ", batch_size)
+    
     for i in range(ARG.epoch):
-        loss_dist = []
         np.random.shuffle(idxlist) ## 打乱节点的列表
+        ndcg_dist = []
+        r50_dist = []
+        r20_dist = []
         for bnum, st_idx in enumerate(range(0, n, batch_size)):
             end_idx = min(st_idx + batch_size, n)
-
             subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
             subgraph = graph.edge_subgraph(subgraph_edges)
             x = train_data[list(subgraph.nodes())].to(dev)
@@ -517,66 +533,48 @@ def train(ARG):
             loss.backward()
             optimizer.step()
             l = loss.item()
-            loss_dist.append(l)
+
+            logits_ = logits.detach()
+            logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
+            logits_ = logits_.cpu()
             
-        loss_dist_mean = np.mean(np.array(loss_dist))
-        print('Epoch ', i, ' trn-loss: %.4f' % loss_dist_mean)
+            t = sparse.coo_matrix(T[list(subgraph.nodes())])
+            ndcg_100 = ndcg_binary_at_k_batch(logits_, t, k=100)
+            ndcg_dist.append(ndcg_100)
+            r50 = recall_at_k_batch(logits_, t, k=50)
+            r50_dist.append(r50)
+            r20 = recall_at_k_batch(logits_, t, k=20)
+            r20_dist.append(r20)
+        ndcg_dist = np.concatenate(ndcg_dist)
+        r50_dist = np.concatenate(r50_dist)
+        r20_dist = np.concatenate(r20_dist)
+        print(len(ndcg_dist), len(r20_dist), len(r50_dist))
+        ndcg_100 = ndcg_dist.mean()
+        r50 = r50_dist.mean()
+        r20 = r20_dist.mean()
+            # early stop和保存模型
+        if best < ndcg_100 + r20 + r50:
+            best = ndcg_100 + r20 + r50
+            best_epoch = i
+            best_ndcg = ndcg_100
+            best_recall_20 = r20
+            best_recall_50 = r50
+            best_ndcg_std = np.std(ndcg_dist) / np.sqrt(len(ndcg_dist))
+            best_recall_20_std =np.std(r20_dist) / np.sqrt(len(r20_dist))
+            best_recall_50_std = np.std(r50_dist) / np.sqrt(len(r50_dist))
+            torch.save(model.state_dict(), './model/edge_'+str(best_epoch) + '_' + str(ARG.data) +'.pt')
+
+        print('Epoch ', i, ' trn-loss: %.4f' % l, ' ndcg100: %.4f' % ndcg_100, ' recall: %.4f' % r20, ' recall: %.4f' % r50)
 
     # 训练完毕在测试集上进行测试
-    torch.save(model.state_dict(), './model/' + "edge" + '_' + str(ARG.data) + '.pt')
-    ndcg_dist = []
-    r50_dist = []
-    r20_dist = []
-    n = number
-    idxlist = list(range(n))
-    batch_size = int(float(n + 1) / ARG.batchNum)
-    for bnum, st_idx in enumerate(range(0, n, batch_size)):
-        end_idx = min(st_idx + batch_size, n)
-        # 测试数据
-        t = sparse.coo_matrix(T[idxlist[st_idx:end_idx]])
-        # 用于测试的对应训练数据
-        x = train_data[idxlist[st_idx:end_idx]].to(dev)
-        # 初始化子图和图采样
-        subgraph = graph.subgraph(idxlist[st_idx:end_idx])
-    
-        # subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-        # subgraph = graph.edge_subgraph(subgraph_edges)
-        # t = sparse.coo_matrix(T[list(subgraph.nodes())])
-        # x = train_data[list(subgraph.nodes())]
-
-        mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes())))
-        subgraph = nx.relabel_nodes(subgraph, mapping)
-        neibSampler = NeibSampler(subgraph, ARG.nbsz)
-        neibSampler.to(dev)
-        # 得到测试结果
-        model.eval()
-        logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
-        logits_ = logits.detach()
-        logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
-        logits_ = logits_.cpu()
-        # 计算NDCG@100\RECALL@50\RECALL@20
-        ndcg_100 = ndcg_binary_at_k_batch(logits_, t, k=100)
-        ndcg_dist.append(ndcg_100)
-        r50 = recall_at_k_batch(logits_, t, k=50)
-        r50_dist.append(r50)
-        r20 = recall_at_k_batch(logits_, t, k=20)
-        r20_dist.append(r20)
-
-    #计算平均值获得测试结果
-    ndcg_dist = np.concatenate(ndcg_dist)
-    r50_dist = np.concatenate(r50_dist)
-    r20_dist = np.concatenate(r20_dist)
-    ndcg_100 = ndcg_dist.mean()
-    r50 = r50_dist.mean()
-    r20 = r20_dist.mean()
 
     print('test:')
     print("Test NDCG@100=%.5f (%.5f)" % (
-        ndcg_100, np.std(ndcg_dist) / np.sqrt(len(ndcg_dist))))
+        best_ndcg, best_ndcg_std))
     print("Test Recall@20=%.5f (%.5f)" % (
-        r20, np.std(r20_dist) / np.sqrt(len(r20_dist))))
+        best_recall_20, best_recall_20_std))
     print("Test Recall@50=%.5f (%.5f)" % (
-        r50, np.std(r50_dist) / np.sqrt(len(r50_dist))))
+        best_recall_50, best_recall_50_std))
 
 if __name__ == '__main__':
     ARG = parseArgs()

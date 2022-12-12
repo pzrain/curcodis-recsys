@@ -1,0 +1,2 @@
+python src/main_node_new.py --data Epinion --numGCNLayer 1 --numLayer 1 --ratio 2 --partitionK 7 --gpudevice 2
+python src/main_node_new.py --data Epinion --numGCNLayer 1 --numLayer 3 --ratio 2 --partitionK 7 --gpudevice 2

@@ -1,0 +1,28 @@
+BASE
+
+lastfm
+Test NDCG@100=0.26851 (0.00472)
+Test Recall@20=0.27022 (0.00591)
+Test Recall@50=0.39763 (0.00669)
+
+
+EDGE
+
+lastfm
+Test NDCG@100=0.25839 (0.00479)
+Test Recall@20=0.25652 (0.00579)
+Test Recall@50=0.38455 (0.00667)
+
+REARRANGE
+
+lastfm
+Test NDCG@100=0.25727 (0.00475)
+Test Recall@20=0.25595 (0.00579)
+Test Recall@50=0.37755 (0.00664)
+
+BABYSTEP
+
+lastfm
+Test NDCG@100=0.25479 (0.00466)
+Test Recall@20=0.25492 (0.00583)
+Test Recall@50=0.37925 (0.00664)

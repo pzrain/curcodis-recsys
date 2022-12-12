@@ -1,4 +1,5 @@
 import argparse
+import operator
 import random
 
 import torch
@@ -11,6 +12,7 @@ import numpy as np
 import scipy.sparse as sparse
 import networkx as nx
 import bottleneck as bn
+from difficulty import calc_difficulty
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -34,7 +36,7 @@ def parseArgs():
                      help='Temperature of sigmoid/softmax, in (0,oo).')
     ARG.add_argument('--std', type=float, default=0.075,
                      help='Standard deviation of the Gaussian prior.')
-    ARG.add_argument('--kfac', type=int, default=9,
+    ARG.add_argument('--kfac', type=int, default=7,
                      help='Number of facets (macro concepts).')
     ARG.add_argument('--dfac', type=int, default=250,
                      help='Dimension of each facet.')
@@ -54,7 +56,7 @@ def parseArgs():
                         help='Insist on using CPU instead of CUDA.')
     ARG.add_argument('--monorate', action='store_true', default=True,
                         help='Transform the input rates into 0/1.')
-    ARG.add_argument('--split', type=float, default=0,
+    ARG.add_argument('--split', type=float, default=0.1,
                      help='Proportion of validation data in the training dataset.')
     ARG.add_argument('--ratio', type=float, default=8,
                      help='Ratio between residual and DisenGCN.')
@@ -482,30 +484,32 @@ def train(ARG):
     ARG.device = dev
 
     #加载训练数据，用户关系图，用户数量，物品数量，验证集，测试集
-    train_data, graph, n, m, V, T\
+    train_data, graph, n, m, V, T \
         = loadData(ARG.data+'/train.txt', ARG.data+'/trusts.txt', ARG.data+'/test+.txt')
 
     model = myVAE(m, ARG).to(dev)
     optimizer = optim.Adam(model.parameters(), lr=ARG.lr, weight_decay=ARG.rg)
 
-    number = n
-    n = graph.number_of_edges()
-    print("n = ", n)
-    graph_edges = list(graph.edges)
     idxlist = list(range(n))
     batch_size = int(float(n) / ARG.batchNum)
-    print("sizes of edges = ", len(idxlist))
-    print("batch_size = ", batch_size)
     for i in range(ARG.epoch):
-        loss_dist = []
         np.random.shuffle(idxlist) ## 打乱节点的列表
+        subgraphs = []
+        loss_dist = []
+        ndcg_dist = []
+        r50_dist = []
+        r20_dist = []
         for bnum, st_idx in enumerate(range(0, n, batch_size)):
             end_idx = min(st_idx + batch_size, n)
+            subgraph = graph.subgraph(idxlist[st_idx:end_idx]) ##  a subgraph of nodes
+            _, _, I, _, _, _ = calc_difficulty(subgraph)
+            subgraphs.append((subgraph, I, st_idx, end_idx))
+        subgraphs.sort(key=operator.itemgetter(1))
 
-            subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-            subgraph = graph.edge_subgraph(subgraph_edges)
-            x = train_data[list(subgraph.nodes())].to(dev)
-            mapping = dict(zip(subgraph, range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
+        for tup in subgraphs:
+            subgraph = tup[0]
+            x = train_data[idxlist[tup[2]:tup[3]]].to(dev)
+            mapping = dict(zip(idxlist[tup[2]:tup[3]], range(subgraph.number_of_nodes()))) 
             subgraph = nx.relabel_nodes(subgraph, mapping)
             # 初始化对应于该子图的采样
             neibSampler = NeibSampler(subgraph, ARG.nbsz)
@@ -523,13 +527,10 @@ def train(ARG):
         print('Epoch ', i, ' trn-loss: %.4f' % loss_dist_mean)
 
     # 训练完毕在测试集上进行测试
-    torch.save(model.state_dict(), './model/' + "edge" + '_' + str(ARG.data) + '.pt')
+    torch.save(model.state_dict(), './model/' + "rearrange" + '_' + str(ARG.data) +'.pt')
     ndcg_dist = []
     r50_dist = []
     r20_dist = []
-    n = number
-    idxlist = list(range(n))
-    batch_size = int(float(n + 1) / ARG.batchNum)
     for bnum, st_idx in enumerate(range(0, n, batch_size)):
         end_idx = min(st_idx + batch_size, n)
         # 测试数据
@@ -538,11 +539,6 @@ def train(ARG):
         x = train_data[idxlist[st_idx:end_idx]].to(dev)
         # 初始化子图和图采样
         subgraph = graph.subgraph(idxlist[st_idx:end_idx])
-    
-        # subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-        # subgraph = graph.edge_subgraph(subgraph_edges)
-        # t = sparse.coo_matrix(T[list(subgraph.nodes())])
-        # x = train_data[list(subgraph.nodes())]
 
         mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes())))
         subgraph = nx.relabel_nodes(subgraph, mapping)

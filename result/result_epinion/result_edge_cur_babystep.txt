@@ -1,371 +1,367 @@
 n =  381216
 sizes of edges =  381216
-batch_size =  635
+batch_size =  544
 0.1
-src/main_edge_cur_babystep.py:206: RuntimeWarning: invalid value encountered in divide
-  ndcg = dcg / idcg
 Early Stop!
-Epoch  0  trn-loss: 438.9708  ndcg: 0.0069
+Epoch  0  trn-loss: 466.4239  ndcg: 0.0067
 0.10825000000000001
 Early Stop!
-Epoch  1  trn-loss: 444.1429  ndcg: 0.0062
+Epoch  1  trn-loss: 466.0616  ndcg: 0.0073
 0.1165
 Early Stop!
-Epoch  2  trn-loss: 439.0466  ndcg: 0.0076
+Epoch  2  trn-loss: 482.5356  ndcg: 0.0061
 0.12475000000000001
 Early Stop!
-Epoch  3  trn-loss: 490.9100  ndcg: 0.0077
+Epoch  3  trn-loss: 491.3126  ndcg: 0.0086
 0.133
 Early Stop!
-Epoch  4  trn-loss: 439.3914  ndcg: 0.0083
+Epoch  4  trn-loss: 456.5772  ndcg: 0.0069
 0.14125000000000001
 Early Stop!
-Epoch  5  trn-loss: 432.3542  ndcg: 0.0080
+Epoch  5  trn-loss: 441.4776  ndcg: 0.0076
 0.14950000000000002
 Early Stop!
-Epoch  6  trn-loss: 419.6138  ndcg: 0.0080
+Epoch  6  trn-loss: 436.7474  ndcg: 0.0071
 0.15775
 Early Stop!
-Epoch  7  trn-loss: 452.3237  ndcg: 0.0087
+Epoch  7  trn-loss: 438.7228  ndcg: 0.0044
 0.166
 Early Stop!
-Epoch  8  trn-loss: 424.3301  ndcg: 0.0103
+Epoch  8  trn-loss: 453.2394  ndcg: 0.0067
 0.17425000000000002
 Early Stop!
-Epoch  9  trn-loss: 398.6820  ndcg: 0.0080
+Epoch  9  trn-loss: 442.8025  ndcg: 0.0074
 0.1825
 Early Stop!
-Epoch  10  trn-loss: 433.8318  ndcg: 0.0078
+Epoch  10  trn-loss: 469.2940  ndcg: 0.0079
 0.19075000000000003
 Early Stop!
-Epoch  11  trn-loss: 442.7847  ndcg: 0.0078
+Epoch  11  trn-loss: 443.3146  ndcg: 0.0071
 0.199
 Early Stop!
-Epoch  12  trn-loss: 412.7905  ndcg: 0.0072
+Epoch  12  trn-loss: 430.1866  ndcg: 0.0073
 0.20725000000000005
 Early Stop!
-Epoch  13  trn-loss: 427.3228  ndcg: 0.0068
+Epoch  13  trn-loss: 462.1640  ndcg: 0.0072
 0.21550000000000002
 Early Stop!
-Epoch  14  trn-loss: 412.1928  ndcg: 0.0070
+Epoch  14  trn-loss: 427.7466  ndcg: 0.0082
 0.22375
 Early Stop!
-Epoch  15  trn-loss: 438.5775  ndcg: 0.0091
+Epoch  15  trn-loss: 445.0158  ndcg: 0.0080
 0.232
 Early Stop!
-Epoch  16  trn-loss: 443.6583  ndcg: 0.0082
+Epoch  16  trn-loss: 439.2315  ndcg: 0.0061
 0.24025000000000002
 Early Stop!
-Epoch  17  trn-loss: 439.0803  ndcg: 0.0092
+Epoch  17  trn-loss: 469.9609  ndcg: 0.0076
 0.24850000000000003
 Early Stop!
-Epoch  18  trn-loss: 415.3672  ndcg: 0.0089
+Epoch  18  trn-loss: 441.7011  ndcg: 0.0097
 0.25675000000000003
 Early Stop!
-Epoch  19  trn-loss: 451.4491  ndcg: 0.0071
+Epoch  19  trn-loss: 436.9342  ndcg: 0.0072
 0.265
 Early Stop!
-Epoch  20  trn-loss: 413.4162  ndcg: 0.0085
+Epoch  20  trn-loss: 467.6609  ndcg: 0.0067
 0.27325000000000005
 Early Stop!
-Epoch  21  trn-loss: 403.4707  ndcg: 0.0084
+Epoch  21  trn-loss: 458.4844  ndcg: 0.0078
 0.28150000000000003
 Early Stop!
-Epoch  22  trn-loss: 417.5786  ndcg: 0.0080
+Epoch  22  trn-loss: 422.4913  ndcg: 0.0079
 0.28975
 Early Stop!
-Epoch  23  trn-loss: 427.3511  ndcg: 0.0084
+Epoch  23  trn-loss: 421.7455  ndcg: 0.0074
 0.29800000000000004
 Early Stop!
-Epoch  24  trn-loss: 420.3772  ndcg: 0.0078
+Epoch  24  trn-loss: 410.1485  ndcg: 0.0068
 0.30625
 Early Stop!
-Epoch  25  trn-loss: 454.6933  ndcg: 0.0060
+Epoch  25  trn-loss: 446.2232  ndcg: 0.0082
 0.31450000000000006
 Early Stop!
-Epoch  26  trn-loss: 398.9510  ndcg: 0.0078
+Epoch  26  trn-loss: 462.6630  ndcg: 0.0074
 0.32275000000000004
 Early Stop!
-Epoch  27  trn-loss: 432.3806  ndcg: 0.0063
+Epoch  27  trn-loss: 398.2654  ndcg: 0.0072
 0.331
 Early Stop!
-Epoch  28  trn-loss: 419.5466  ndcg: 0.0073
+Epoch  28  trn-loss: 449.7007  ndcg: 0.0068
 0.33925000000000005
 Early Stop!
-Epoch  29  trn-loss: 416.5757  ndcg: 0.0071
+Epoch  29  trn-loss: 426.9392  ndcg: 0.0057
 0.34750000000000003
 Early Stop!
-Epoch  30  trn-loss: 448.2398  ndcg: 0.0083
+Epoch  30  trn-loss: 467.3666  ndcg: 0.0077
 0.35575
 Early Stop!
-Epoch  31  trn-loss: 450.9734  ndcg: 0.0073
+Epoch  31  trn-loss: 431.7466  ndcg: 0.0081
 0.364
 Early Stop!
-Epoch  32  trn-loss: 432.9776  ndcg: 0.0066
+Epoch  32  trn-loss: 434.1471  ndcg: 0.0080
 0.3722500000000001
 Early Stop!
-Epoch  33  trn-loss: 432.4955  ndcg: 0.0067
+Epoch  33  trn-loss: 408.8579  ndcg: 0.0067
 0.38050000000000006
 Early Stop!
-Epoch  34  trn-loss: 425.6641  ndcg: 0.0072
+Epoch  34  trn-loss: 439.2655  ndcg: 0.0058
 0.38875000000000004
 Early Stop!
-Epoch  35  trn-loss: 401.9862  ndcg: 0.0084
+Epoch  35  trn-loss: 423.4478  ndcg: 0.0081
 0.397
 Early Stop!
-Epoch  36  trn-loss: 415.1621  ndcg: 0.0082
+Epoch  36  trn-loss: 465.8036  ndcg: 0.0070
 0.4052500000000001
 Early Stop!
-Epoch  37  trn-loss: 383.9038  ndcg: 0.0077
+Epoch  37  trn-loss: 444.2727  ndcg: 0.0067
 0.4135000000000001
 Early Stop!
-Epoch  38  trn-loss: 395.3183  ndcg: 0.0074
+Epoch  38  trn-loss: 477.1007  ndcg: 0.0064
 0.42175000000000007
 Early Stop!
-Epoch  39  trn-loss: 406.9500  ndcg: 0.0081
+Epoch  39  trn-loss: 422.6682  ndcg: 0.0081
 0.43000000000000005
 Early Stop!
-Epoch  40  trn-loss: 441.8239  ndcg: 0.0066
+Epoch  40  trn-loss: 420.9780  ndcg: 0.0085
 0.43825000000000003
 Early Stop!
-Epoch  41  trn-loss: 411.2886  ndcg: 0.0072
+Epoch  41  trn-loss: 426.5804  ndcg: 0.0063
 0.4465000000000001
 Early Stop!
-Epoch  42  trn-loss: 421.1442  ndcg: 0.0075
+Epoch  42  trn-loss: 420.0786  ndcg: 0.0080
 0.4547500000000001
 Early Stop!
-Epoch  43  trn-loss: 414.1710  ndcg: 0.0067
+Epoch  43  trn-loss: 411.1317  ndcg: 0.0077
 0.4630000000000001
 Early Stop!
-Epoch  44  trn-loss: 424.6866  ndcg: 0.0075
+Epoch  44  trn-loss: 449.5796  ndcg: 0.0067
 0.47125000000000006
 Early Stop!
-Epoch  45  trn-loss: 426.8441  ndcg: 0.0087
+Epoch  45  trn-loss: 460.8371  ndcg: 0.0077
 0.47950000000000004
 Early Stop!
-Epoch  46  trn-loss: 416.0842  ndcg: 0.0075
+Epoch  46  trn-loss: 421.1487  ndcg: 0.0061
 0.48775000000000013
 Early Stop!
-Epoch  47  trn-loss: 412.0524  ndcg: 0.0084
+Epoch  47  trn-loss: 414.7546  ndcg: 0.0074
 0.4960000000000001
 Early Stop!
-Epoch  48  trn-loss: 411.7998  ndcg: 0.0081
+Epoch  48  trn-loss: 411.2362  ndcg: 0.0074
 0.5042500000000001
 Early Stop!
-Epoch  49  trn-loss: 435.0225  ndcg: 0.0072
+Epoch  49  trn-loss: 438.7311  ndcg: 0.0070
 0.5125000000000001
 Early Stop!
-Epoch  50  trn-loss: 404.7385  ndcg: 0.0079
+Epoch  50  trn-loss: 400.4454  ndcg: 0.0063
 0.52075
 Early Stop!
-Epoch  51  trn-loss: 410.8807  ndcg: 0.0067
+Epoch  51  trn-loss: 432.5799  ndcg: 0.0065
 0.5290000000000001
 Early Stop!
-Epoch  52  trn-loss: 419.5619  ndcg: 0.0079
+Epoch  52  trn-loss: 415.3878  ndcg: 0.0070
 0.5372500000000001
 Early Stop!
-Epoch  53  trn-loss: 410.7119  ndcg: 0.0083
+Epoch  53  trn-loss: 400.8128  ndcg: 0.0063
 0.5455000000000001
 Early Stop!
-Epoch  54  trn-loss: 410.0106  ndcg: 0.0075
+Epoch  54  trn-loss: 434.0218  ndcg: 0.0069
 0.5537500000000001
 Early Stop!
-Epoch  55  trn-loss: 421.2162  ndcg: 0.0064
+Epoch  55  trn-loss: 420.3208  ndcg: 0.0081
 0.562
 Early Stop!
-Epoch  56  trn-loss: 385.6057  ndcg: 0.0077
+Epoch  56  trn-loss: 423.4113  ndcg: 0.0066
 0.5702500000000001
 Early Stop!
-Epoch  57  trn-loss: 417.5525  ndcg: 0.0077
+Epoch  57  trn-loss: 436.8932  ndcg: 0.0074
 0.5785000000000001
 Early Stop!
-Epoch  58  trn-loss: 437.5971  ndcg: 0.0074
+Epoch  58  trn-loss: 412.5708  ndcg: 0.0062
 0.5867500000000001
 Early Stop!
-Epoch  59  trn-loss: 423.9529  ndcg: 0.0068
+Epoch  59  trn-loss: 407.7194  ndcg: 0.0083
 0.5950000000000001
 Early Stop!
-Epoch  60  trn-loss: 424.0049  ndcg: 0.0078
+Epoch  60  trn-loss: 425.7188  ndcg: 0.0069
 0.6032500000000001
 Early Stop!
-Epoch  61  trn-loss: 434.2514  ndcg: 0.0077
+Epoch  61  trn-loss: 385.4171  ndcg: 0.0067
 0.6115
 Early Stop!
-Epoch  62  trn-loss: 403.7026  ndcg: 0.0077
+Epoch  62  trn-loss: 410.7560  ndcg: 0.0080
 0.61975
 Early Stop!
-Epoch  63  trn-loss: 393.7471  ndcg: 0.0079
+Epoch  63  trn-loss: 416.9131  ndcg: 0.0077
 0.628
 Early Stop!
-Epoch  64  trn-loss: 375.3180  ndcg: 0.0072
+Epoch  64  trn-loss: 428.8244  ndcg: 0.0071
 0.63625
 Early Stop!
-Epoch  65  trn-loss: 415.8534  ndcg: 0.0083
+Epoch  65  trn-loss: 424.6648  ndcg: 0.0069
 0.6445000000000001
 Early Stop!
-Epoch  66  trn-loss: 393.5887  ndcg: 0.0079
+Epoch  66  trn-loss: 388.9828  ndcg: 0.0068
 0.65275
 Early Stop!
-Epoch  67  trn-loss: 410.4684  ndcg: 0.0076
+Epoch  67  trn-loss: 443.7007  ndcg: 0.0078
 0.661
 Early Stop!
-Epoch  68  trn-loss: 406.6005  ndcg: 0.0069
+Epoch  68  trn-loss: 423.6458  ndcg: 0.0078
 0.66925
 Early Stop!
-Epoch  69  trn-loss: 392.9684  ndcg: 0.0068
+Epoch  69  trn-loss: 412.1346  ndcg: 0.0049
 0.6775
 Early Stop!
-Epoch  70  trn-loss: 408.2513  ndcg: 0.0084
+Epoch  70  trn-loss: 410.7190  ndcg: 0.0076
 0.6857500000000001
 Early Stop!
-Epoch  71  trn-loss: 409.8720  ndcg: 0.0080
+Epoch  71  trn-loss: 413.4578  ndcg: 0.0079
 0.6940000000000001
 Early Stop!
-Epoch  72  trn-loss: 405.7641  ndcg: 0.0075
+Epoch  72  trn-loss: 413.1524  ndcg: 0.0060
 0.70225
 Early Stop!
-Epoch  73  trn-loss: 430.5706  ndcg: 0.0075
+Epoch  73  trn-loss: 404.7648  ndcg: 0.0064
 0.7105000000000001
 Early Stop!
-Epoch  74  trn-loss: 411.8229  ndcg: 0.0069
+Epoch  74  trn-loss: 427.0346  ndcg: 0.0067
 0.71875
 Early Stop!
-Epoch  75  trn-loss: 404.4427  ndcg: 0.0082
+Epoch  75  trn-loss: 400.2466  ndcg: 0.0070
 0.7270000000000001
 Early Stop!
-Epoch  76  trn-loss: 423.4528  ndcg: 0.0071
+Epoch  76  trn-loss: 413.1200  ndcg: 0.0067
 0.7352500000000001
 Early Stop!
-Epoch  77  trn-loss: 392.3893  ndcg: 0.0082
+Epoch  77  trn-loss: 405.8379  ndcg: 0.0056
 0.7435
 Early Stop!
-Epoch  78  trn-loss: 420.3468  ndcg: 0.0072
+Epoch  78  trn-loss: 385.6904  ndcg: 0.0067
 0.7517500000000001
 Early Stop!
-Epoch  79  trn-loss: 408.3036  ndcg: 0.0098
+Epoch  79  trn-loss: 434.7494  ndcg: 0.0068
 0.76
 Early Stop!
-Epoch  80  trn-loss: 420.1529  ndcg: 0.0073
+Epoch  80  trn-loss: 406.9375  ndcg: 0.0071
 0.7682500000000001
 Early Stop!
-Epoch  81  trn-loss: 429.6466  ndcg: 0.0078
+Epoch  81  trn-loss: 431.3483  ndcg: 0.0081
 0.7765000000000001
 Early Stop!
-Epoch  82  trn-loss: 393.1067  ndcg: 0.0072
+Epoch  82  trn-loss: 431.9677  ndcg: 0.0072
 0.7847500000000001
 Early Stop!
-Epoch  83  trn-loss: 394.3188  ndcg: 0.0092
+Epoch  83  trn-loss: 430.4385  ndcg: 0.0057
 0.7930000000000001
 Early Stop!
-Epoch  84  trn-loss: 397.3746  ndcg: 0.0081
+Epoch  84  trn-loss: 433.9170  ndcg: 0.0065
 0.80125
 Early Stop!
-Epoch  85  trn-loss: 389.5040  ndcg: 0.0072
+Epoch  85  trn-loss: 381.2222  ndcg: 0.0067
 0.8095000000000001
 Early Stop!
-Epoch  86  trn-loss: 378.5976  ndcg: 0.0083
+Epoch  86  trn-loss: 422.9252  ndcg: 0.0062
 0.81775
 Early Stop!
-Epoch  87  trn-loss: 404.3700  ndcg: 0.0084
+Epoch  87  trn-loss: 400.1717  ndcg: 0.0074
 0.8260000000000001
 Early Stop!
-Epoch  88  trn-loss: 403.4578  ndcg: 0.0073
+Epoch  88  trn-loss: 417.5629  ndcg: 0.0073
 0.8342500000000002
 Early Stop!
-Epoch  89  trn-loss: 406.8517  ndcg: 0.0065
+Epoch  89  trn-loss: 412.9696  ndcg: 0.0069
 0.8425
 Early Stop!
-Epoch  90  trn-loss: 402.8417  ndcg: 0.0080
+Epoch  90  trn-loss: 430.5288  ndcg: 0.0068
 0.8507500000000001
 Early Stop!
-Epoch  91  trn-loss: 381.6632  ndcg: 0.0085
+Epoch  91  trn-loss: 412.9606  ndcg: 0.0064
 0.859
 Early Stop!
-Epoch  92  trn-loss: 407.1067  ndcg: 0.0069
+Epoch  92  trn-loss: 393.1991  ndcg: 0.0063
 0.8672500000000001
 Early Stop!
-Epoch  93  trn-loss: 416.8411  ndcg: 0.0087
+Epoch  93  trn-loss: 412.1909  ndcg: 0.0070
 0.8755000000000002
 Early Stop!
-Epoch  94  trn-loss: 407.1144  ndcg: 0.0073
+Epoch  94  trn-loss: 394.5287  ndcg: 0.0059
 0.88375
 Early Stop!
-Epoch  95  trn-loss: 417.6555  ndcg: 0.0075
+Epoch  95  trn-loss: 425.1768  ndcg: 0.0061
 0.8920000000000001
 Early Stop!
-Epoch  96  trn-loss: 392.2167  ndcg: 0.0079
+Epoch  96  trn-loss: 396.0833  ndcg: 0.0081
 0.90025
 Early Stop!
-Epoch  97  trn-loss: 398.5728  ndcg: 0.0060
+Epoch  97  trn-loss: 418.5635  ndcg: 0.0068
 0.9085000000000001
 Early Stop!
-Epoch  98  trn-loss: 418.8359  ndcg: 0.0073
+Epoch  98  trn-loss: 393.9713  ndcg: 0.0069
 0.9167500000000002
 Early Stop!
-Epoch  99  trn-loss: 396.3833  ndcg: 0.0071
+Epoch  99  trn-loss: 406.5422  ndcg: 0.0053
 0.925
 Early Stop!
-Epoch  100  trn-loss: 419.8254  ndcg: 0.0079
+Epoch  100  trn-loss: 421.0865  ndcg: 0.0061
 0.9332500000000001
 Early Stop!
-Epoch  101  trn-loss: 389.0360  ndcg: 0.0080
+Epoch  101  trn-loss: 414.4460  ndcg: 0.0068
 0.9415
 Early Stop!
-Epoch  102  trn-loss: 404.5821  ndcg: 0.0084
+Epoch  102  trn-loss: 415.2346  ndcg: 0.0068
 0.9497500000000001
 Early Stop!
-Epoch  103  trn-loss: 401.9756  ndcg: 0.0071
+Epoch  103  trn-loss: 404.3347  ndcg: 0.0077
 0.9580000000000002
 Early Stop!
-Epoch  104  trn-loss: 387.2070  ndcg: 0.0081
+Epoch  104  trn-loss: 409.3144  ndcg: 0.0065
 0.96625
 Early Stop!
-Epoch  105  trn-loss: 400.9616  ndcg: 0.0059
+Epoch  105  trn-loss: 381.7969  ndcg: 0.0067
 0.9745000000000001
 Early Stop!
-Epoch  106  trn-loss: 395.3933  ndcg: 0.0081
+Epoch  106  trn-loss: 426.1200  ndcg: 0.0069
 0.98275
 Early Stop!
-Epoch  107  trn-loss: 409.9655  ndcg: 0.0069
+Epoch  107  trn-loss: 399.4043  ndcg: 0.0078
 0.9910000000000001
 Early Stop!
-Epoch  108  trn-loss: 396.4338  ndcg: 0.0080
+Epoch  108  trn-loss: 429.2496  ndcg: 0.0068
 0.9992500000000002
 Early Stop!
-Epoch  109  trn-loss: 384.8195  ndcg: 0.0067
+Epoch  109  trn-loss: 410.4608  ndcg: 0.0084
 1
 Early Stop!
-Epoch  110  trn-loss: 407.9854  ndcg: 0.0081
+Epoch  110  trn-loss: 396.3945  ndcg: 0.0076
 1
 Early Stop!
-Epoch  111  trn-loss: 375.8857  ndcg: 0.0073
+Epoch  111  trn-loss: 388.8667  ndcg: 0.0080
 1
 Early Stop!
-Epoch  112  trn-loss: 407.7564  ndcg: 0.0082
+Epoch  112  trn-loss: 391.7189  ndcg: 0.0080
 1
 Early Stop!
-Epoch  113  trn-loss: 416.0422  ndcg: 0.0076
+Epoch  113  trn-loss: 380.1784  ndcg: 0.0068
 1
 Early Stop!
-Epoch  114  trn-loss: 418.8629  ndcg: 0.0075
+Epoch  114  trn-loss: 405.4188  ndcg: 0.0068
 1
 Early Stop!
-Epoch  115  trn-loss: 411.1717  ndcg: 0.0076
+Epoch  115  trn-loss: 411.5037  ndcg: 0.0063
 1
 Early Stop!
-Epoch  116  trn-loss: 398.6180  ndcg: 0.0070
+Epoch  116  trn-loss: 404.2219  ndcg: 0.0072
 1
 Early Stop!
-Epoch  117  trn-loss: 424.9609  ndcg: 0.0080
+Epoch  117  trn-loss: 401.2282  ndcg: 0.0081
 1
 Early Stop!
-Epoch  118  trn-loss: 408.2072  ndcg: 0.0078
+Epoch  118  trn-loss: 401.8852  ndcg: 0.0069
 1
 Early Stop!
-Epoch  119  trn-loss: 424.2241  ndcg: 0.0066
-src/main_edge_cur_babystep.py:221: RuntimeWarning: invalid value encountered in divide
-  recall = tmp / np.minimum(k, x_true_binary.sum(axis=1))
+Epoch  119  trn-loss: 409.2196  ndcg: 0.0052
 test:
-Test NDCG@100=0.04966 (0.00011)
-Test Recall@20=0.04474 (0.00016)
-Test Recall@50=0.07471 (0.00021)
+Test NDCG@100=0.04989 (0.00077)
+Test Recall@20=0.05534 (0.00126)
+Test Recall@50=0.09681 (0.00165)

@@ -1,5 +1,7 @@
 import argparse
+import operator
 import random
+from math import sqrt, log2
 
 import torch
 import torch.autograd
@@ -11,7 +13,9 @@ import numpy as np
 import scipy.sparse as sparse
 import networkx as nx
 import bottleneck as bn
+from difficulty import calc_difficulty
 import os
+import time
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def parseArgs():
@@ -34,9 +38,9 @@ def parseArgs():
                      help='Temperature of sigmoid/softmax, in (0,oo).')
     ARG.add_argument('--std', type=float, default=0.075,
                      help='Standard deviation of the Gaussian prior.')
-    ARG.add_argument('--kfac', type=int, default=9,
+    ARG.add_argument('--kfac', type=int, default=7,
                      help='Number of facets (macro concepts).')
-    ARG.add_argument('--dfac', type=int, default=250,
+    ARG.add_argument('--dfac', type=int, default=200,
                      help='Dimension of each facet.')
     ARG.add_argument('--nogb', action='store_true', default=False,
                      help='Disable Gumbel-Softmax sampling.')
@@ -54,10 +58,12 @@ def parseArgs():
                         help='Insist on using CPU instead of CUDA.')
     ARG.add_argument('--monorate', action='store_true', default=True,
                         help='Transform the input rates into 0/1.')
-    ARG.add_argument('--split', type=float, default=0,
+    ARG.add_argument('--split', type=float, default=0.1,
                      help='Proportion of validation data in the training dataset.')
     ARG.add_argument('--ratio', type=float, default=8,
                      help='Ratio between residual and DisenGCN.')
+    ARG.add_argument('--option', type=str, default='edge',
+                     help='Option : edge, rearrange, babystep')
     ARG = ARG.parse_args()
 
     return ARG
@@ -396,6 +402,28 @@ class myVAE(nn.Module):
             return z_list, logits, neg_elbo
         return logits, neg_elbo
 
+class Scheduler:
+    
+    def __init__(self, mode, total_epoch, step, lambda_0):
+        self.mode = mode
+        self.total_epoch = total_epoch
+        self.step = step
+        interval = self.total_epoch / (self.step + 1)
+        self.curriculum_epoch = interval * self.step
+        self.epoch = 0
+        self.lambda_0 = lambda_0
+        
+    def schedule(self):
+        if self.mode == 'linear':
+            threshold = min(1, self.lambda_0 + (1 - self.lambda_0) * self.epoch / self.curriculum_epoch)
+        elif self.mode == 'root':
+            threshold = min(1, sqrt(self.lambda_0 ** 2 + (1 - self.lambda_0 ** 2) * self.epoch / self.curriculum_epoch))
+        elif self.mode == 'geometric':
+            threshold = min(1, pow(2, log2(self.lambda_0) - log2(self.lambda_0) * self.epoch / self.curriculum_epoch))
+        self.epoch += 1
+        return threshold
+
+
 # 加载数据
 # 所有数据已经被处理成：userID ItemID Rate的形式
 # 用户之间的关系数据被处理为： user1ID user2ID的形式
@@ -480,30 +508,66 @@ def train(ARG):
     use_cuda = torch.cuda.is_available() and not ARG.cpu
     dev = torch.device('cuda' if use_cuda else 'cpu')
     ARG.device = dev
+    assert int(ARG.epoch) > 0
 
     #加载训练数据，用户关系图，用户数量，物品数量，验证集，测试集
-    train_data, graph, n, m, V, T\
+    train_data, graph, n, m, V, T \
         = loadData(ARG.data+'/train.txt', ARG.data+'/trusts.txt', ARG.data+'/test+.txt')
 
     model = myVAE(m, ARG).to(dev)
     optimizer = optim.Adam(model.parameters(), lr=ARG.lr, weight_decay=ARG.rg)
 
+    best_epoch = -1
+    best_ndcg = -np.inf
+
+    early_step = 0
+    option = ARG.option
     number = n
     n = graph.number_of_edges()
-    print("n = ", n)
     graph_edges = list(graph.edges)
+    if option == 'babystep':
+        cur_scheduler = Scheduler('linear', ARG.epoch, 10, 0.10)
     idxlist = list(range(n))
     batch_size = int(float(n) / ARG.batchNum)
-    print("sizes of edges = ", len(idxlist))
-    print("batch_size = ", batch_size)
     for i in range(ARG.epoch):
-        loss_dist = []
         np.random.shuffle(idxlist) ## 打乱节点的列表
-        for bnum, st_idx in enumerate(range(0, n, batch_size)):
-            end_idx = min(st_idx + batch_size, n)
+        subgraphs = []
+        valid_ndcg_list = []
+        loss_list = []
+        if option == 'edge':
+            for bnum, st_idx in enumerate(range(0, n, batch_size)):
+                end_idx = min(st_idx + batch_size, n)
+                subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
+                subgraph = graph.edge_subgraph(subgraph_edges)
+                subgraphs.append((subgraph, 1))
+        elif option == 'babystep':
+            min_difficulty = 1
+            threshold = cur_scheduler.schedule()
+            for bnum, st_idx in enumerate(range(0, n, batch_size)):
+                end_idx = min(st_idx + batch_size, n)
+                subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
+                subgraph = graph.edge_subgraph(subgraph_edges)
+                _, _, I, _, _, _ = calc_difficulty(subgraph)
+                if I < min_difficulty:
+                    min_difficulty = I
+                    min_subgraph = subgraph
+                if I < threshold:
+                    subgraphs.append((subgraph, 1))
+            if len(subgraphs) == 0:
+                subgraphs.append((min_subgraph, 1))
+        elif option == 'rearrange':
+            for bnum, st_idx in enumerate(range(0, n, batch_size)):
+                end_idx = min(st_idx + batch_size, n)
+                subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
+                subgraph = graph.edge_subgraph(subgraph_edges)
+                _, _, I, _, _, _ = calc_difficulty(subgraph)
+                subgraphs.append((subgraph, I))
+            subgraphs.sort(key=operator.itemgetter(1))
+        else:
+            raise NotImplementedError()
 
-            subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-            subgraph = graph.edge_subgraph(subgraph_edges)
+        for tup in subgraphs:
+            subgraph = tup[0]
             x = train_data[list(subgraph.nodes())].to(dev)
             mapping = dict(zip(subgraph, range(subgraph.number_of_nodes()))) ## 重新编号所需要的映射
             subgraph = nx.relabel_nodes(subgraph, mapping)
@@ -517,13 +581,41 @@ def train(ARG):
             loss.backward()
             optimizer.step()
             l = loss.item()
-            loss_dist.append(l)
-            
-        loss_dist_mean = np.mean(np.array(loss_dist))
-        print('Epoch ', i, ' trn-loss: %.4f' % loss_dist_mean)
+            loss_list.append(l)
+
+            # 在训练结果中去掉训练数据，以免影响预测效果
+            logits_ = logits.detach()
+            logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
+            logits_ = logits_.cpu()
+            # 在验证集上计算NDCG@100值
+            # v = sparse.coo_matrix(V[list(subgraph.nodes())])
+            # ndcg_dist = ndcg_binary_at_k_batch(logits_, v)
+            # if (len(ndcg_dist) > 0):
+            #     valid_ndcg_list.append(ndcg_dist)
+
+        # valid_ndcg_list = np.array(valid_ndcg_list)
+        # valid_ndcg_list = np.concatenate(valid_ndcg_list)
+        # epoch_ndcg = np.mean(valid_ndcg_list)
+        loss = np.mean(loss_list)
+        # early stop和保存模型
+        # if best_ndcg < epoch_ndcg:
+        #     best_epoch = i
+        #     best_ndcg = epoch_ndcg
+        #     torch.save(model.state_dict(), './model/' + str(option) + '_' + str(ARG.data) + '_' +str(best_epoch)+'.pt')
+        #     early_stop = 0
+        # else:
+        #     early_stop += 1
+        #     if early_stop >= ARG.early:
+        #         print("Early Stop!")
+        #         break
+
+        # print('Epoch ', i, ' trn-loss: %.4f' % loss, ' ndcg: %.4f' % epoch_ndcg)
+        print('Epoch ', i, ' trn-loss: %.4f' % loss)
 
     # 训练完毕在测试集上进行测试
-    torch.save(model.state_dict(), './model/' + "edge" + '_' + str(ARG.data) + '.pt')
+    # state_dict = torch.load('./model/' + str(option) + '_' + str(ARG.data) + '_' +str(best_epoch)+'.pt')
+    # model.load_state_dict(state_dict)
+    torch.save(model.state_dict(), './model/' + str(option) + '_' + str(ARG.data) + '_' + str(time.time()) + '_' +str(best_epoch)+'.pt')
     ndcg_dist = []
     r50_dist = []
     r20_dist = []
@@ -538,11 +630,6 @@ def train(ARG):
         x = train_data[idxlist[st_idx:end_idx]].to(dev)
         # 初始化子图和图采样
         subgraph = graph.subgraph(idxlist[st_idx:end_idx])
-    
-        # subgraph_edges = [graph_edges[index] for index in idxlist[st_idx:end_idx]]
-        # subgraph = graph.edge_subgraph(subgraph_edges)
-        # t = sparse.coo_matrix(T[list(subgraph.nodes())])
-        # x = train_data[list(subgraph.nodes())]
 
         mapping = dict(zip(idxlist[st_idx:end_idx], range(subgraph.number_of_nodes())))
         subgraph = nx.relabel_nodes(subgraph, mapping)
