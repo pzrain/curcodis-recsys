@@ -516,85 +516,56 @@ def two_k_partition(G: nx.Graph, k: int):
         subgraphs = [subgraph_1, subgraph_2]
     return subgraphs
 
-best_epoch = -1
-best_sum = -1
-best_ndcg = -1
-best_ndcg_std = -1
-best_r20 = -1
-best_r20_std = -1
-best_r50 = -1
-best_r50_std = -1
-
 def test(ARG, model, graph, train_data, T, dev, epoch, subgraphs):
-    global best_epoch
-    global best_sum
-    global best_ndcg
-    global best_ndcg_std
-    global best_r20
-    global best_r20_std
-    global best_r50
-    global best_r50_std
     
-    ndcg_dist = []
-    r50_dist = []
-    r20_dist = []
-    # for edge in graph.edges():
-    #     graph[edge[0]][edge[1]]["weight"] = 1
-    # subgraphs = two_k_partition(graph, ARG.partitionK)
-    for i in range(len(subgraphs)):
-        subgraph = subgraphs[i]
-        subgraph_nodes = list(subgraph.nodes())
-        t = sparse.coo_matrix(T[subgraph.nodes()])
-        # 用于测试的对应训练数据
-        x = train_data[subgraph_nodes].to(dev)
-        # 初始化子图和图采样
-        mapping = dict(zip(subgraph_nodes, range(subgraph.number_of_nodes())))
-        subgraph = nx.relabel_nodes(subgraph, mapping)
-        neibSampler = NeibSampler(subgraph, ARG.nbsz)
-        neibSampler.to(dev)
-        # 得到测试结果
-        model.eval()
-        logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
-        logits_ = logits.detach()
-        logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
-        logits_ = logits_.cpu()
-        # 计算NDCG@100\RECALL@50\RECALL@20
-        ndcg_100 = ndcg_binary_at_k_batch(logits_, t, k=100)
-        ndcg_dist.append(ndcg_100)
-        r50 = recall_at_k_batch(logits_, t, k=50)
-        r50_dist.append(r50)
-        r20 = recall_at_k_batch(logits_, t, k=20)
-        r20_dist.append(r20)
+    model.eval()
+    with torch.no_grad():
+        for i in range(len(subgraphs)):
+            subgraph = subgraphs[i]
+            subgraph_nodes = list(subgraph.nodes())
+            t = sparse.coo_matrix(T[subgraph.nodes()])
+            # 用于测试的对应训练数据
+            x = train_data[subgraph_nodes].to(dev)
+            # 初始化子图和图采样
+            mapping = dict(zip(subgraph_nodes, range(subgraph.number_of_nodes())))
+            subgraph = nx.relabel_nodes(subgraph, mapping)
+            neibSampler = NeibSampler(subgraph, ARG.nbsz)
+            neibSampler.to(dev)
+            logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
+    items = model.items.detach().cpu()
+    cores = model.cores.detach().cpu()
+    items = model.l2_normalize(items, axis=1)
+    cores = model.l2_normalize(cores, axis=1)
+    cates_logits = torch.mm(items, torch.transpose(cores,0,1)) / ARG.tau
+    f_softmax = nn.Softmax(dim=1)
+    cates = f_softmax(cates_logits)
+    items_cates = np.argmax(cates, axis=1)
+    palette = np.array(
+        [[35 , 126, 181, 80], # _0. Blue
+        [255, 129, 190, 80],  # _1. Pink
+        [255, 127, 38 , 80],  # _2. Orange
+        [59 , 175, 81 , 80],  # _3. Green
+        [156, 78 , 161, 80],  # _4. Purple
+        [238, 27 , 39 , 80],  # _5. Red
+        [153, 153, 153, 80],  # _6. Gray
+        [0, 0, 0, 80]],       # _7: Black 
+        dtype=np.float32) / 255.0
+    col_pred = palette[items_cates]
+    print('tsne...')
+    nodes_kd = PCA(n_components=ARG.kfac).fit_transform(items) \
+            if ARG.dfac > ARG.kfac else items
+    nodes_2d = TSNE(n_jobs=8).fit_transform(nodes_kd)
+    np.save('npy/temp-%s-%d.npy' % (ARG.data, epoch), nodes_2d)
+
+    plt.figure()
+    plt.scatter(x=nodes_2d[:,0], y=nodes_2d[:, 1], c=col_pred, s=1)
+    plt.savefig('item_result/' + ARG.data + '_' + str(epoch) + '.jpg')
+    plt.clf()
+    
+        
 
     #计算平均值获得测试结果
-    ndcg_dist = np.concatenate(ndcg_dist)
-    r50_dist = np.concatenate(r50_dist)
-    r20_dist = np.concatenate(r20_dist)
-    ndcg_100 = ndcg_dist.mean()
-    r50 = r50_dist.mean()
-    r20 = r20_dist.mean()
 
-    ndcg_std = np.std(ndcg_dist) / np.sqrt(len(ndcg_dist))
-    r20_std = np.std(r20_dist) / np.sqrt(len(r20_dist))
-    r50_std = np.std(r50_dist) / np.sqrt(len(r50_dist))
-
-    if ndcg_100 + r50 + r20 > best_sum:
-        best_epoch = epoch
-        best_sum = ndcg_100 + r50 + r20
-        best_ndcg = ndcg_100
-        best_ndcg_std = ndcg_std
-        best_r50 = r50
-        best_r50_std = r50_std
-        best_r20 = r20
-        best_r20_std = r20_std
-
-    print('test: epoch %d' % (epoch))
-    print("Test NDCG@100=%.5f (%.5f)" % (
-        ndcg_100, np.std(ndcg_dist) / np.sqrt(len(ndcg_dist))))
-    print("Test Recall@20=%.5f (%.5f)" % (
-        r20, np.std(r20_dist) / np.sqrt(len(r20_dist))))
-    print("Test Recall@50=%.5f (%.5f)" % (
-        r50, np.std(r50_dist) / np.sqrt(len(r50_dist))))
 
 def train(ARG):
     # 设置训练所用的gpu
@@ -655,36 +626,7 @@ def train(ARG):
         loss = np.mean(loss_list)
         print('Epoch ', epochNum, ' trn-loss: %.4f' % loss)
         if (epochNum + 1) % 5 == 0:
-            items = model.state_dict()['items'].detach().cpu()
-            cores = model.state_dict()['cores'].detach().cpu()
-            cates_logits = torch.mm(items, torch.transpose(cores,0,1)) / ARG.tau
-            softmax = nn.Softmax(dim=1)
-            cates = softmax(cates_logits)
-            items_cates = np.argmax(cates, axis=1)
-            palette = np.array(
-                [[35 , 126, 181, 80], # _0. Blue
-                [255, 129, 190, 80],  # _1. Pink
-                [255, 127, 38 , 80],  # _2. Orange
-                [59 , 175, 81 , 80],  # _3. Green
-                [156, 78 , 161, 80],  # _4. Purple
-                [238, 27 , 39 , 80],  # _5. Red
-                [153, 153, 153, 80],  # _6. Gray
-                [0, 0, 0, 80]],       # _7: Black 
-                dtype=np.float32) / 255.0
-            col_pred = palette[items_cates]
-            try:
-                nodes_2d = np.load('npy/temp-%s-%d.npy' % (ARG.data, epochNum))
-            except:
-                print('tsne...')
-                nodes_kd = PCA(n_components=ARG.kfac).fit_transform(items) \
-                        if ARG.dfac > ARG.kfac else items
-                nodes_2d = TSNE(n_jobs=8).fit_transform(nodes_kd)
-                np.save('npy/temp-%s-%d.npy' % (ARG.data, epochNum), nodes_2d)
-
-            plt.figure()
-            plt.scatter(x=nodes_2d[:,0], y=nodes_2d[:, 1], c=col_pred, s=1)
-            plt.savefig('item_result/' + ARG.data + '_' + str(epochNum) + '.jpg')
-            plt.clf()
+            test(ARG, model, graph, train_data, T, dev, epochNum, subgraphs)
 
     # 训练完毕在测试集上进行测试
     torch.save(model.state_dict(), './model/node_'+ str(ARG.data) + '_' + str(time.time()) +'.pt')
