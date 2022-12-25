@@ -366,9 +366,7 @@ class myVAE(nn.Module):
             z_list.append(z_k)
         # 将预测得到的子表征输入以DisenGraph层为主体的残差网络
         z = torch.cat(z_list, dim=1)
-        origin_z = z
         z = self.residual(z, neighbors)
-        print(z.size())
         dfac = int(z.shape[1] / self.kfac)
 
         # 将学习了社交信息的表征送进Decoder解码器
@@ -541,9 +539,8 @@ def test(ARG, model, graph, train_data, T, dev, epoch, subgraphs):
         z, logits, loss = model(True, neibSampler.sample(), x, 1, ARG.beta)
         correlation = np.absolute(np.corrcoef(z.cpu().detach().numpy(), rowvar=False))
         # print(correlation.shape)
-        print(correlation[0])
         plt.matshow(correlation, cmap=plt.get_cmap('Greens'))
-        plt.savefig('corr_result/' + str(epoch) + '.jpg')
+        plt.savefig('corr_result/' + str(ARG.data) + '/' + str(epoch) + '.jpg')
 
 
 
@@ -612,12 +609,12 @@ def train(ARG):
         # python sup/main_corr.py --data lastfm --epoch 10 --numGCNLayer 2 --numLayer 3 --ratio 4 --routit 10 --partitionK 0 --kfac 8 --dfac 8
         if (epochNum + 1) % 2 == 0:
             # test(ARG, model, graph, train_data, T, dev, epochNum, subgraphs)
-            correlation = np.absolute(np.corrcoef(z.cpu().detach().numpy(), rowvar=False))
+            correlation = np.absolute(np.corrcoef(z_list, rowvar=False))
             figure = plt.figure()
             axes = figure.add_subplot(111)
             caxes = axes.matshow(correlation, interpolation ='nearest', cmap=plt.get_cmap('Greens'))
             figure.colorbar(caxes)
-            plt.savefig('corr_result/' + str(epochNum) + '.jpg')
+            plt.savefig('corr_result/' + str(ARG.data) + '/' + str(epochNum) + '.jpg')
             plt.clf()
 
     # 训练完毕在测试集上进行测试
