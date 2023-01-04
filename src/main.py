@@ -12,7 +12,7 @@ import scipy.sparse as sparse
 import networkx as nx
 import bottleneck as bn
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def parseArgs():
     ARG = argparse.ArgumentParser()
@@ -36,7 +36,7 @@ def parseArgs():
                      help='Standard deviation of the Gaussian prior.')
     ARG.add_argument('--kfac', type=int, default=7,
                      help='Number of facets (macro concepts).')
-    ARG.add_argument('--dfac', type=int, default=100,
+    ARG.add_argument('--dfac', type=int, default=200,
                      help='Dimension of each facet.')
     ARG.add_argument('--nogb', action='store_true', default=False,
                      help='Disable Gumbel-Softmax sampling.')
@@ -56,7 +56,7 @@ def parseArgs():
                         help='Transform the input rates into 0/1.')
     ARG.add_argument('--split', type=float, default=0.1,
                      help='Proportion of validation data in the training dataset.')
-    ARG.add_argument('--ratio', type=float, default=8,
+    ARG.add_argument('--ratio', type=float, default=6,
                      help='Ratio between residual and DisenGCN.')
     ARG = ARG.parse_args()
 

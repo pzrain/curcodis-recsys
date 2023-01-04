@@ -1,2 +1,4 @@
 model/
 _pycache_/
+*.json
+*.gz

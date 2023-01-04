@@ -13,7 +13,7 @@ import networkx as nx
 import bottleneck as bn
 import os
 import time
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def parseArgs():
     ARG = argparse.ArgumentParser()
