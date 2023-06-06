@@ -20,11 +20,9 @@ from difficulty import calc_difficulty
 def parseArgs():
     ARG = argparse.ArgumentParser()
     ARG.add_argument('--data', type=str, default='lastfm',
-                     help='../dataset/lastfm, ../dataset/duoban, ../dataset/Ciao, ../dataset/Epinion, ../dataset/yelp', )
+                     help='lastfm, amazon, Epinion, yelp', )
     ARG.add_argument('--epoch', type=int, default=160,
                      help='Number of maximum training epochs.')
-    ARG.add_argument('--batchNum', type=int, default=2,
-                 help='Training Number of batch.')
     ARG.add_argument('--lr', type=float, default=1e-3,
                      help='Initial learning rate.')
     ARG.add_argument('--rg', type=float, default=0.0,
@@ -48,23 +46,21 @@ def parseArgs():
     ARG.add_argument("--numGCNLayer", type=int, default=5,
                      help="Number of disenGCN layers")
     ARG.add_argument('--dropout', type=float, default=0.35,
-                            help='Dropout rate (1 - keep probability) in DisenConv.')
+                     help='Dropout rate (1 - keep probability) in DisenConv.')
     ARG.add_argument('--routit', type=int, default=10,
-                            help='Number of iterations when routing.')
+                     help='Number of iterations when routing.')
     ARG.add_argument('--nbsz', type=int, default=20,
-                            help='Size of the sampled neighborhood.')
-    ARG.add_argument('--early', type=int, default=20,
-                        help='Extra iterations before early-stopping.')
-    ARG.add_argument('--cpu', action='store_true', default=False,
-                        help='Insist on using CPU instead of CUDA.')
+                     help='Size of the sampled neighborhood.')
     ARG.add_argument('--monorate', action='store_true', default=True,
-                        help='Transform the input rates into 0/1.')
+                     help='Transform the input rates into 0/1.')
     ARG.add_argument('--split', type=float, default=0.1,
                      help='Proportion of validation data in the training dataset.')
     ARG.add_argument('--ratio', type=float, default=8,
                      help='Ratio between residual and DisenGCN.')
-    ARG.add_argument('--partitionK', type=int, default=4, help="partition the graph into 2^k subgraphs")
-    ARG.add_argument('--gpudevice', type=int, default=0)
+    ARG.add_argument('--partitionK', type=int, default=4, 
+                     help="partition the graph into 2^k subgraphs")
+    ARG.add_argument('--gpudevice', type=int, default=0,
+                     help="gpu device used in training")
     ARG = ARG.parse_args()
 
     return ARG
