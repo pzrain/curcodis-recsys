@@ -1,6 +1,0 @@
-python src/main_node_new_rearrange.py --data yelp --epoch 120 --partitionK 6 --numGCNLayer 5 --numLayer 1 --ra
-tio 8 --routit 10
-epoch 220
-Test NDCG@100=0.29430 (0.00509)                                                                                                                             
-Test Recall@20=0.29121 (0.00604)                                                                                                                            
-Test Recall@50=0.42037 (0.00675)

@@ -16,11 +16,10 @@ import os
 import time
 
 from difficulty import calc_difficulty
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def parseArgs():
     ARG = argparse.ArgumentParser()
-    ARG.add_argument('--data', type=str, default='douban',
+    ARG.add_argument('--data', type=str, default='lastfm',
                      help='../dataset/lastfm, ../dataset/duoban, ../dataset/Ciao, ../dataset/Epinion, ../dataset/yelp', )
     ARG.add_argument('--epoch', type=int, default=160,
                      help='Number of maximum training epochs.')
@@ -60,7 +59,7 @@ def parseArgs():
                         help='Insist on using CPU instead of CUDA.')
     ARG.add_argument('--monorate', action='store_true', default=True,
                         help='Transform the input rates into 0/1.')
-    ARG.add_argument('--split', type=float, default=0,
+    ARG.add_argument('--split', type=float, default=0.1,
                      help='Proportion of validation data in the training dataset.')
     ARG.add_argument('--ratio', type=float, default=8,
                      help='Ratio between residual and DisenGCN.')
@@ -70,27 +69,7 @@ def parseArgs():
 
     return ARG
 
-#在DisenGraph中初始化表征的input层，实际上没用到
-class SparseInputLinear(nn.Module):
-    def __init__(self, inp_dim, out_dim):
-        super(SparseInputLinear, self).__init__()
-        weight = np.zeros((inp_dim, out_dim), dtype=np.float32)
-        weight = nn.Parameter(torch.from_numpy(weight))
-        bias = np.zeros(out_dim, dtype=np.float32)
-        bias = nn.Parameter(torch.from_numpy(bias))
-        self.inp_dim, self.out_dim = inp_dim, out_dim
-        self.weight, self.bias = weight, bias
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        stdv = 1. / np.sqrt(self.weight.size(1))
-        self.weight.data.uniform_(-stdv, stdv)
-        self.bias.data.uniform_(-stdv, stdv)
-
-    def forward(self, x):  # *nn.Linear* does not accept sparse *x*.
-        return torch.mm(x, self.weight) + self.bias
-
-#在DisenGCN层中用于采样邻居
+# Neighbor Sampler in DisenGCN
 class NeibSampler:
     def __init__(self, graph, nb_size, include_self=False):
         n = graph.number_of_nodes()
@@ -126,7 +105,7 @@ class NeibSampler:
         nb[self.pk] = torch.from_numpy(pk_nb).to(nb.device)
         return self.nb_all ## ?
 
-#DisenGCN层中的路由传播部分
+# Neighbor Routing Layer
 class RoutingLayer(nn.Module):
     def __init__(self, cap_sz, out_caps, inp_caps=None):
         super(RoutingLayer, self).__init__()
@@ -161,15 +140,12 @@ class RoutingLayer(nn.Module):
                 u = fn.normalize(u, dim=2)
         return u.view(n, d)
 
-# DisenGCN层
-# 相对于源代码默认jump=False
+# Layers of DisGCN
 class Capsule(nn.Module):
     def __init__(self, nlayer, ncaps, nhidden, dropout=0.35, routit=6):
         super(Capsule, self).__init__()
         conv_ls = []
         inp_caps, out_caps = None, ncaps
-        #这个pca层实际上没用到
-        self.pca = SparseInputLinear(nhidden * ncaps, nhidden * ncaps)
         for i in range(nlayer):
             conv = RoutingLayer(nhidden, out_caps, inp_caps)
             self.add_module('conv_%-d' % i, conv)
@@ -182,13 +158,12 @@ class Capsule(nn.Module):
     def _dropout(self, x):
         return fn.dropout(x, self.dropout, training=self.training)
 
-    def forward(self, x, nb): ## nb: neighbor
+    def forward(self, x, nb):
         nb = nb.view(-1)
         for conv in self.conv_ls:
             x = self._dropout(fn.relu(conv(x, nb, self.routit)))
         return x
 
-# 计算NDCG@K
 def ndcg_binary_at_k_batch(x_pred, heldout_batch, k=100):
     """
     normalized discounted cumulative gain@k for binary relevance
@@ -213,7 +188,6 @@ def ndcg_binary_at_k_batch(x_pred, heldout_batch, k=100):
     ndcg = ndcg[~np.isnan(ndcg)]
     return ndcg
 
-# 计算RECALL@K
 def recall_at_k_batch(x_pred, heldout_batch, k=100):
     batch_users = x_pred.shape[0]
     idx = bn.argpartition(-x_pred, k, axis=1)
@@ -227,13 +201,10 @@ def recall_at_k_batch(x_pred, heldout_batch, k=100):
     recall = recall[~np.isnan(recall)]
     return recall
 
-# 以上代码全部来自于DisenGCN或者Disentangle-recsys
-# 源代码可以在 https://jianxinma.github.io/ 找到
-# 可能在将tensorflow迁移到pytorch以及调试训练时进行了一些修改，但基本是一样的
+# The above code comes from DisenGCN or Disentangle-recsys
+# Source code can be obtained at https://jianxinma.github.io/
 
-# 带参数ratio的残差网络（或者可以理解为attention network）
-# x: Disentangle-recsys的输出特征
-# block: DisenGCN层
+# residual network with attention `ratio`
 class RecursiveResidual(nn.Module):
     def __init__(self, block, numLayers, ratio):
         super().__init__()
@@ -248,9 +219,9 @@ class RecursiveResidual(nn.Module):
         return o
 
 # 以disentangle-recsys源码为基础的VAE
-class myVAE(nn.Module):
+class CurCoDis(nn.Module):
     def __init__(self, num_items, ARG):
-        super(myVAE, self).__init__()
+        super(CurCoDis, self).__init__()
         # 初始化参数
         kfac, dfac = ARG.kfac, ARG.dfac
         self.lam = ARG.rg
@@ -264,8 +235,7 @@ class myVAE(nn.Module):
         self.anneal_ph = None
         self.is_training_ph = None
         self.device = ARG.device
-        # 初始化网络层
-        self.dropout = nn.Dropout(p=(1-ARG.keep)) ## randomly zeroes some of the element of the input tensor with probabiity p using samples from a Bernouli distribution
+        self.dropout = nn.Dropout(p=(1-ARG.keep)) 
         self.softmax = nn.Softmax(dim=1)
         self.logsoftmax = nn.LogSoftmax(dim=-1)
         self.q_dims = [num_items, dfac, dfac]
@@ -289,7 +259,7 @@ class myVAE(nn.Module):
             self.linears_q.append(linear)
             self.add_module('fc_%-d' % i, linear)
 
-    #以下是两个用于初始化和归一化的工具函数
+    # Initialization and normalization
     def truncated_normal_(self, tensor, mean=0, std=0.09):
         with torch.no_grad():
             size = tensor.shape
@@ -302,7 +272,7 @@ class myVAE(nn.Module):
 
     def l2_normalize(self, x, axis):
         norm = torch.norm(x, 2, axis, True)
-        norm = norm + torch.full_like(norm, 1e-15) # 处理norm为0的情况
+        norm = norm + torch.full_like(norm, 1e-15) # deal with norm = 0
         x = torch.div(x, norm)
         return x
 
@@ -316,8 +286,8 @@ class myVAE(nn.Module):
             linear = self.linears_q[i]
             h = linear(h)
             if i != l - 1:
-                h = torch.tanh(h) ## 线性层中间夹的激活层
-            else: ## 最后一层，计算得到结果
+                h = torch.tanh(h) # activation layer between linear layers
+            else: # the final layer
                 mu_q = h[:, :self.q_dims[-1]]
                 mu_q = self.l2_normalize(mu_q, axis=1)
                 lnvarq_sub_lnvar0 = -h[:, self.q_dims[-1]:]
@@ -328,13 +298,12 @@ class myVAE(nn.Module):
                     0.5 * (-lnvarq_sub_lnvar0 + torch.exp(lnvarq_sub_lnvar0) - 1.), 1))
         return mu_q, std_q, kl
 
-    # 向前传播函数，大部分和disen-recsys是一样的
+
     def forward(self, save_emb, neighbors, input_ph=None, is_training_ph=None, anneal_ph=None):
         self.input_ph = input_ph
         self.is_training_ph = is_training_ph
         self.anneal_ph = anneal_ph
 
-        ## ============
         # clustering
         cores = self.l2_normalize(self.cores, axis=1)
         items = self.l2_normalize(self.items, axis=1)
@@ -347,16 +316,18 @@ class myVAE(nn.Module):
             cates_mode = self.softmax(cates_logits)
             cates = (self.is_training_ph * cates_sample +
                      (1 - self.is_training_ph) * cates_mode)
-        ## ============ 得到cates，cates是近似于one-hot的向量，代表物品的分类
+        # cates is expected to be like one-hot, representing the category of items
 
-        # 预测表征符合的正态分布，并从中采样得到对应于每个macro concept的子表征
+        # predicts the normal distribution that the representation fits
+        # then sample from the distribution to obtain the sub embedding corresponding to each macro concept
         z_list = []
         probs, kl = None, None
+        
+        # Encoder
         for k in range(self.kfac):
             cates_k = torch.reshape(cates[:, k], (1, -1))
-
             # q-network
-            x_k = (self.input_ph * cates_k)  ## 提取出所有属于类别k的物品，用来计算对应于k的子表征
+            x_k = (self.input_ph * cates_k)  # select items belonging to category k
             mu_k, std_k, kl_k = self.q_graph_k(x_k)
             epsilon = torch.empty(std_k.shape).to(self.device)
             nn.init.normal_(epsilon)
@@ -364,45 +335,40 @@ class myVAE(nn.Module):
             kl = (kl_k if (kl is None) else (kl + kl_k))
             z_list.append(z_k)
 
-        # 将预测得到的子表征输入以DisenGraph层为主体的残差网络
         z = torch.cat(z_list, dim=1)
-        z = self.residual(z, neighbors)
+        z = self.residual(z, neighbors) # send into the residual network (DisGCN)
         dfac = int(z.shape[1] / self.kfac)
 
-        # 将学习了社交信息的表征送进Decoder解码器
+        # Decoder
         for k in range(self.kfac):
             cates_k = torch.reshape(cates[:, k], (1, -1))
             # p-network
             z_k = z[:,dfac * k: dfac * (k+1)]
             z_k = self.l2_normalize(z_k, axis=1)
-            logits_k = torch.matmul(z_k, torch.transpose(items,0,1)) / self.tau ## 在第k个因子对应的子表征上与物品的相似度
+            logits_k = torch.matmul(z_k, torch.transpose(items,0,1)) / self.tau # simliarity on the kth prototype
             probs_k = torch.exp(logits_k)
-            probs_k = probs_k * cates_k ## 只有物品属于类别k，才考虑相似度
+            probs_k = probs_k * cates_k
             probs = (probs_k if (probs is None) else (probs + probs_k))
 
-        # 计算网络输出结果和Loss
+        # loss
         logits = torch.log(probs)
         logits = self.logsoftmax(logits)
-        recon_loss = torch.mean(torch.sum(-logits * self.input_ph, -1)) ## 类似于于交叉熵，self.input_ph是label
+        recon_loss = torch.mean(torch.sum(-logits * self.input_ph, -1))
 
-        # 计算参数的模来避免梯度爆炸 但是因为我在训练的过程中一直将rg/lam设为0，所以实际上没用到
         reg_var = torch.tensor(0.0).to(self.device)
         reg_var += torch.norm(self.items,2)
         reg_var += torch.norm(self.cores,2)
         for linear in self.linears_q:
             reg_var += torch.norm(linear.weight, 2)
 
-        # print("recon_loss:", recon_loss, " kl:", kl)
-
         neg_elbo = recon_loss + self.anneal_ph * kl + self.lam * reg_var
-        ## loss + KL_Divergence + regularization
 
-
-        # 是否需要输出表征
+        # whether output the embedding
         if save_emb:
             return z_list, logits, neg_elbo
         return logits, neg_elbo
 
+# Curriculum Scheduler
 class Scheduler:
     
     def __init__(self, mode, total_epoch, step, lambda_0):
@@ -415,6 +381,7 @@ class Scheduler:
         self.lambda_0 = lambda_0
         
     def schedule(self):
+        # Three strategies, linear, root and geometric
         if self.mode == 'linear':
             threshold = min(1, self.lambda_0 + (1 - self.lambda_0) * self.epoch / self.curriculum_epoch)
         elif self.mode == 'root':
@@ -424,18 +391,27 @@ class Scheduler:
         self.epoch += 1
         return threshold
 
-# 加载数据
-# 所有数据已经被处理成：userID ItemID Rate的形式
-# 用户之间的关系数据被处理为： user1ID user2ID的形式
-# 且都没有多余空行
-# ratingDir为训练数据 socialDir为用户关系数据 testDir为测试数据
+# KL algorithm to partition the social graph into 2^k subgraphs
+def two_k_partition(G: nx.Graph, k: int):
+    partition_1, partition_2 = nx.algorithms.community.kernighan_lin_bisection(G)
+    subgraph_1, subgraph_2 = G.subgraph(partition_1), G.subgraph(partition_2)
+    if k > 1:
+        subgraphs_1 = two_k_partition(subgraph_1, k - 1)
+        subgraphs_2 = two_k_partition(subgraph_2, k - 1)
+        subgraphs = subgraphs_1 + subgraphs_2
+    else:
+        subgraphs = [subgraph_1, subgraph_2]
+    return subgraphs
+
+# Load data
+# userId ItemId Rate
 def loadData(ratingDir, socialDir, testDir):
     with open(ratingDir) as f:
         ratings = f.readlines()
     with open(socialDir) as f:
         relates = f.readlines()
 
-    # 加载训练集
+    # train data
     MaxUserId = -1
     MaxItemId = -1
     user = []
@@ -453,7 +429,8 @@ def loadData(ratingDir, socialDir, testDir):
             MaxUserId = userId
         if itemId > MaxItemId:
             MaxItemId = itemId
-        # 将训练数据中按照split比例分离出一部分作为验证集
+        
+        # validation data
         if random.random() > ARG.split:
             user.append(userId)
             item.append(itemId)
@@ -466,11 +443,9 @@ def loadData(ratingDir, socialDir, testDir):
             validItem.append(itemId)
             validRate.append(1)
 
-    ## X为tensor，V为array
     X = torch.sparse.FloatTensor(torch.tensor([user,item]),torch.tensor(rate),torch.Size([MaxUserId+1, MaxItemId+1])).to_dense()
     V = sparse.coo_matrix((validRate, (validUser, validItem)), shape=(MaxUserId+1, MaxItemId+1)).toarray()
 
-    # 加载用户关系数据
     edges = []
     for line in relates:
         items = line.split()
@@ -482,7 +457,7 @@ def loadData(ratingDir, socialDir, testDir):
     graph.add_nodes_from(range(MaxUserId+1))
     graph.add_edges_from(edges)
 
-    # 加载测试集
+    # test data
     testUser = []
     testItem = []
     testRate = []
@@ -499,63 +474,30 @@ def loadData(ratingDir, socialDir, testDir):
         testRate.append(1)
     T = sparse.coo_matrix((testRate, (testUser, testItem)), shape=(MaxUserId + 1, MaxItemId + 1)).toarray()
 
-    # 这个地方加1是为了后面用range()函数的时候可以不用再加了
     return X, graph, MaxUserId+1, MaxItemId+1, V, T
 
-def two_k_partition(G: nx.Graph, k: int):
-    partition_1, partition_2 = nx.algorithms.community.kernighan_lin_bisection(G)
-    subgraph_1, subgraph_2 = G.subgraph(partition_1), G.subgraph(partition_2)
-    if k > 1:
-        subgraphs_1 = two_k_partition(subgraph_1, k - 1)
-        subgraphs_2 = two_k_partition(subgraph_2, k - 1)
-        subgraphs = subgraphs_1 + subgraphs_2
-    else:
-        subgraphs = [subgraph_1, subgraph_2]
-    return subgraphs
-
-best_epoch = -1
-best_sum = -1
-best_ndcg = -1
-best_ndcg_std = -1
-best_r20 = -1
-best_r20_std = -1
-best_r50 = -1
-best_r50_std = -1
 
 def test(ARG, model, graph, train_data, T, dev, epoch, subgraphs):
-    global best_epoch
-    global best_sum
-    global best_ndcg
-    global best_ndcg_std
-    global best_r20
-    global best_r20_std
-    global best_r50
-    global best_r50_std
     
     ndcg_dist = []
     r50_dist = []
     r20_dist = []
-    # for edge in graph.edges():
-    #     graph[edge[0]][edge[1]]["weight"] = 1
-    # subgraphs = two_k_partition(graph, ARG.partitionK)
     for i in range(len(subgraphs)):
         subgraph = subgraphs[i]
         subgraph_nodes = list(subgraph.nodes())
-        t = sparse.coo_matrix(T[subgraph.nodes()])
-        # 用于测试的对应训练数据
+        t = sparse.coo_matrix(T[subgraph.nodes()]) # test data
         x = train_data[subgraph_nodes].to(dev)
-        # 初始化子图和图采样
         mapping = dict(zip(subgraph_nodes, range(subgraph.number_of_nodes())))
         subgraph = nx.relabel_nodes(subgraph, mapping)
         neibSampler = NeibSampler(subgraph, ARG.nbsz)
         neibSampler.to(dev)
-        # 得到测试结果
+        
         model.eval()
         logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
         logits_ = logits.detach()
         logits_[torch.nonzero(x, as_tuple=True)] = float('-inf')
         logits_ = logits_.cpu()
-        # 计算NDCG@100\RECALL@50\RECALL@20
+        
         ndcg_100 = ndcg_binary_at_k_batch(logits_, t, k=100)
         ndcg_dist.append(ndcg_100)
         r50 = recall_at_k_batch(logits_, t, k=50)
@@ -563,7 +505,6 @@ def test(ARG, model, graph, train_data, T, dev, epoch, subgraphs):
         r20 = recall_at_k_batch(logits_, t, k=20)
         r20_dist.append(r20)
 
-    #计算平均值获得测试结果
     ndcg_dist = np.concatenate(ndcg_dist)
     r50_dist = np.concatenate(r50_dist)
     r20_dist = np.concatenate(r20_dist)
@@ -575,16 +516,6 @@ def test(ARG, model, graph, train_data, T, dev, epoch, subgraphs):
     r20_std = np.std(r20_dist) / np.sqrt(len(r20_dist))
     r50_std = np.std(r50_dist) / np.sqrt(len(r50_dist))
 
-    if ndcg_100 + r50 + r20 > best_sum:
-        best_epoch = epoch
-        best_sum = ndcg_100 + r50 + r20
-        best_ndcg = ndcg_100
-        best_ndcg_std = ndcg_std
-        best_r50 = r50
-        best_r50_std = r50_std
-        best_r20 = r20
-        best_r20_std = r20_std
-
     print('test: epoch %d' % (epoch))
     print("Test NDCG@100=%.5f (%.5f)" % (
         ndcg_100, np.std(ndcg_dist) / np.sqrt(len(ndcg_dist))))
@@ -594,25 +525,24 @@ def test(ARG, model, graph, train_data, T, dev, epoch, subgraphs):
         r50, np.std(r50_dist) / np.sqrt(len(r50_dist))))
 
 def train(ARG):
-    # 设置训练所用的gpu
-    # torch.cuda.set_device(0)
     torch.cuda.set_device(int(ARG.gpudevice))
     use_cuda = torch.cuda.is_available() and not ARG.cpu
     dev = torch.device('cuda' if use_cuda else 'cpu')
     ARG.device = dev
 
-    #加载训练数据，用户关系图，用户数量，物品数量，验证集，测试集
+    # load training data, social graph, number of user, number of item, validation data, testing data
     train_data, graph, n, m, V, T \
         = loadData(ARG.data+'/train.txt', ARG.data+'/trusts.txt', ARG.data+'/test+.txt')
     cur_scheduler = Scheduler("linear", ARG.epoch, 6, 0.10)
 
-    model = myVAE(m, ARG).to(dev)
+    model = CurCoDis(m, ARG).to(dev)
     optimizer = optim.Adam(model.parameters(), lr=ARG.lr, weight_decay=ARG.rg)
-    print("n = ", n)
-    print("edges = ", graph.number_of_edges())
-    punish = float(1/160)
+    
+    # initialize punish and the weight for each edge used in KL partition
+    punish = float(1/ARG.epoch)
     for edge in graph.edges():
         graph[edge[0]][edge[1]]["weight"] = 1
+    
     for epochNum in range(ARG.epoch):
         loss_list = []
         subgraphs = two_k_partition(graph, ARG.partitionK)
@@ -621,24 +551,32 @@ def train(ARG):
         for subgraph in subgraphs:
             _, _, I, _, _, _ = calc_difficulty(subgraph)
             res_subgraphs.append((subgraph, I))
-        res_subgraphs.sort(key=operator.itemgetter(1))    
+        # curriculum sort according to difficulty of each subgraph
+        # the structure of res_subgraph is [[graph, difficulty],...]
+        res_subgraphs.sort(key=operator.itemgetter(1))  
         
+        # mask represents the curriculum weight of each subgraph
+        # it is set to 1 for subgraphs whose difficulty is lower than threshold
+        #    and 1 - difficulty if difficulty is higher than threshold
         mask = np.ones(int(threshold))
         for i in range(int(threshold), len(subgraphs)):
             mask = np.append(mask, 1 - res_subgraphs[i][1])
 
         cnt = 0
         for subgraph, _ in res_subgraphs:
+            
+            # subtract punish value from the weight of edges selected,
+            # so that other edges will be more favorable to be chosen
             for edge in subgraph.edges():
-                graph[edge[0]][edge[1]]["weight"] += punish
+                graph[edge[0]][edge[1]]["weight"] -= punish
+
             subgraph_nodes = list(subgraph.nodes())
             x = train_data[subgraph_nodes].to(dev)
             mapping = dict(zip(subgraph_nodes, range(subgraph.number_of_nodes()))) 
             subgraph = nx.relabel_nodes(subgraph, mapping)
-            # 初始化对应于该子图的采样
+            # sample the neighbors
             neibSampler = NeibSampler(subgraph, ARG.nbsz)
             neibSampler.to(dev)
-            # 训练
             model.train()
             optimizer.zero_grad()
             logits, loss = model(False, neibSampler.sample(), x, 1, ARG.beta)
@@ -651,22 +589,15 @@ def train(ARG):
 
         loss = np.mean(loss_list)
         print('Epoch ', epochNum, ' trn-loss: %.4f' % loss)
-        if (epochNum + 1) % 10 == 0:
+        if (epochNum + 1) % 20 == 0: # test every 20 epochs
             test(ARG, model, graph, train_data, T, dev, epochNum, subgraphs)
 
-    # 训练完毕在测试集上进行测试
-    torch.save(model.state_dict(), './model/node_'+ str(ARG.data) + '_' + str(time.time()) +'.pt')
-    # state_dict = torch.load('./model/node_'+ str(ARG.data) + '_' + str(best_epoch)+'.pt')
-    # model.load_state_dict(state_dict)
+    # final test, using the best model parameters
+    torch.save(model.state_dict(), './model/'+ str(ARG.data) + '_' + str(time.time()) +'.pt')
+    state_dict = torch.load('./model/'+ str(ARG.data) + '_' + str(best_epoch)+'.pt')
+    model.load_state_dict(state_dict)
+    test(ARG, model, graph, train_data, T, dev, epochNum, subgraphs)
 
-    print('BEST test: epoch %d' % (best_epoch))
-    print("BEST Test NDCG@100=%.5f (%.5f)" % (
-        best_ndcg, best_ndcg_std))
-    print("BEST Test Recall@20=%.5f (%.5f)" % (
-        best_r20, best_r20_std))
-    print("BEST Test Recall@50=%.5f (%.5f)" % (
-        best_r50, best_r50_std))
-    print(ARG.numGCNLayer, ARG.numLayer, ARG.ratio)
 
 if __name__ == '__main__':
     ARG = parseArgs()
