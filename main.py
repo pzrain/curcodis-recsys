@@ -55,9 +55,9 @@ def parseArgs():
                      help='Transform the input rates into 0/1.')
     ARG.add_argument('--split', type=float, default=0.1,
                      help='Proportion of validation data in the training dataset.')
-    ARG.add_argument('--ratio', type=float, default=8,
+    ARG.add_argument('--ratio', type=float, default=2,
                      help='Ratio between residual and DisenGCN.')
-    ARG.add_argument('--partitionK', type=int, default=4, 
+    ARG.add_argument('--partitionK', type=int, default=2, 
                      help="partition the graph into 2^k subgraphs")
     ARG.add_argument('--gpudevice', type=int, default=0,
                      help="gpu device used in training")
