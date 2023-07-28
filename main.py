@@ -522,7 +522,7 @@ def test(ARG, model, graph, train_data, T, dev, epoch, subgraphs):
 
 def train(ARG):
     torch.cuda.set_device(int(ARG.gpudevice))
-    use_cuda = torch.cuda.is_available() and not ARG.cpu
+    use_cuda = torch.cuda.is_available()
     dev = torch.device('cuda' if use_cuda else 'cpu')
     ARG.device = dev
 
@@ -588,10 +588,8 @@ def train(ARG):
         if (epochNum + 1) % 20 == 0: # test every 20 epochs
             test(ARG, model, graph, train_data, T, dev, epochNum, subgraphs)
 
-    # final test, using the best model parameters
+    # final test
     torch.save(model.state_dict(), './model/'+ str(ARG.data) + '_' + str(time.time()) +'.pt')
-    state_dict = torch.load('./model/'+ str(ARG.data) + '_' + str(best_epoch)+'.pt')
-    model.load_state_dict(state_dict)
     test(ARG, model, graph, train_data, T, dev, epochNum, subgraphs)
 
 
